@@ -1,4 +1,5 @@
 using BepInEx;
+using BepInEx.Configuration;
 using BepInEx.Logging;
 using Facepunch.Steamworks;
 using GameModeWave;
@@ -7,19 +8,41 @@ using IL.RoR2.UI;
 using R2API;
 using RoR2;
 using UnityEngine;
+using UnityEngine.Networking;
 using UnityEngine.AddressableAssets;
+using System.Collections.Generic;
+using System.Reflection;
+using System.Linq;
+using System;
 using UnityEngine.UI;
+using System.Text;
+using static GameModeWave.ArtifactBase;
+using Mono.Security.Authenticode;
+using RoR2.UI;
+using EntityStates.AffixVoid;
+using EntityStates.ArtifactShell;
+using Newtonsoft.Json.Utilities;
+using UnityEngine.UIElements;
+using System.Threading.Tasks;
+using Rewired;
+using System.Threading;
+using R2API.Utils;
+using TMPro;
+using UnityEngine.SceneManagement;
+using RoR2.Navigation;
+using MonoMod.Cil;
+using System.Reflection.Emit;
+using EntityStates.Missions.ArtifactWorld.TrialController;
+using System.Runtime.Serialization;
 
-namespace ExamplePlugin
+/***
+description: RoR2 Plugin for Adding a Wave-Based Game-Mode
+author: Marcie Henderson
+since: 20240405
+***/
+namespace GameModeWave
 {
-    // This is an example plugin that can be put in
-    // BepInEx/plugins/ExamplePlugin/ExamplePlugin.dll to test out.
-    // It's a small plugin that adds a relatively simple item to the game,
-    // and gives you that item whenever you press F2.
-
     // This attribute specifies that we have a dependency on a given BepInEx Plugin,
-    // We need the R2API ItemAPI dependency because we are using for adding our item to the game.
-    // You don't need this if you're not using R2API in your plugin,
     // it's just to tell BepInEx to initialize R2API before this plugin so it's safe to use R2API.
     [BepInDependency(ItemAPI.PluginGUID)]
 
@@ -31,153 +54,322 @@ namespace ExamplePlugin
     [BepInPlugin(PluginGUID, PluginName, PluginVersion)]
 
     // This is the main declaration of our plugin class.
-    // BepInEx searches for all classes inheriting from BaseUnityPlugin to initialize on startup.
-    // BaseUnityPlugin itself inherits from MonoBehaviour,
-    // so you can use this as a reference for what you can declare and use in your plugin class
-    // More information in the Unity Docs: https://docs.unity3d.com/ScriptReference/MonoBehaviour.html
-    public class ExamplePlugin : BaseUnityPlugin
+    public class GameModeWave : BaseUnityPlugin
     {
-        // The Plugin GUID should be a unique ID for this plugin,
-        // which is human readable (as it is used in places like the config).
-        // If we see this PluginGUID as it is on thunderstore,
-        // we will deprecate this mod.
-        // Change the PluginAuthor and the PluginName !
+        // Plugin GUID and other metadata
         public const string PluginGUID = PluginAuthor + "." + PluginName;
         public const string PluginAuthor = "MarcieHenderson";
-        public const string PluginName = "ExamplePlugin";
-        public const string PluginVersion = "0.0.0.0";
+        public const string PluginName = "GameModeWave";
+        public const string PluginVersion = "0.0.4"; // change with each commit
 
-        // We need our item definition to persist through our functions, and therefore make it a class field.
-        private static ItemDef myItemDef;
-
-        // Hud object definition
-        private RoR2.UI.HUD hud = null;
-
-        // The Awake() method is run at the very start when the game is initialized.
-        public void Awake()
+        // Specify GameModeArtifact class attributes and methods
+        class GameModeArtifact : ArtifactBase
         {
-            // HUD action
-            On.RoR2.UI.HUD.Awake += MyFunc;
-
-            // Init our logging class so that we can properly log for debugging
-            Log.Init(Logger);
-
-            // First let's define our item
-            myItemDef = ScriptableObject.CreateInstance<ItemDef>();
-
-            // Language Tokens, explained there https://risk-of-thunder.github.io/R2Wiki/Mod-Creation/Assets/Localization/
-            myItemDef.name = "EXAMPLE_CLOAKONKILL_NAME";
-            myItemDef.nameToken = "EXAMPLE_CLOAKONKILL_NAME";
-            myItemDef.pickupToken = "EXAMPLE_CLOAKONKILL_PICKUP";
-            myItemDef.descriptionToken = "EXAMPLE_CLOAKONKILL_DESC";
-            myItemDef.loreToken = "EXAMPLE_CLOAKONKILL_LORE";
-
-            // The tier determines what rarity the item is:
-            // Tier1=white, Tier2=green, Tier3=red, Lunar=Lunar, Boss=yellow,
-            // Tier asset codes <"choose one from these brackets">:
-            // RoR2/Base/Common/<Tier1Def,Tier2Def,Tier3Def,BossTierDef,LunarTierDef>.asset
-            // and finally NoTier is generally used for helper items, like the tonic affliction
-            #pragma warning disable Publicizer001 // Accessing a member that was not originally public. Here we ignore this warning because with how this example is setup we are forced to do this
-            myItemDef._itemTierDef = Addressables.LoadAssetAsync<ItemTierDef>("RoR2/Base/Common/BossTierDef.asset").WaitForCompletion();
-            #pragma warning restore Publicizer001
-            // Instead of loading the itemtierdef directly, you can also do this like below as a workaround
-            // myItemDef.deprecatedTier = ItemTier.Tier2;
-
-            // You can create your own icons and prefabs through assetbundles, but to keep this boilerplate brief, we'll be using question marks.
-            myItemDef.pickupIconSprite = Addressables.LoadAssetAsync<Sprite>("RoR2/Base/Common/MiscIcons/texMysteryIcon.png").WaitForCompletion();
-            myItemDef.pickupModelPrefab = Addressables.LoadAssetAsync<GameObject>("RoR2/Base/EliteIce/PickupEliteIce.prefab").WaitForCompletion();
-
-            // Can remove determines
-            // if a shrine of order,
-            // or a printer can take this item,
-            // generally true, except for NoTier items.
-            myItemDef.canRemove = true;
-
-            // Hidden means that there will be no pickup notification,
-            // and it won't appear in the inventory at the top of the screen.
-            // This is useful for certain noTier helper items, such as the DrizzlePlayerHelper.
-            myItemDef.hidden = false;
-
-            // You can add your own display rules here,
-            // where the first argument passed are the default display rules:
-            // the ones used when no specific display rules for a character are found.
-            // For this example, we are omitting them,
-            // as they are quite a pain to set up without tools like https://thunderstore.io/package/KingEnderBrine/ItemDisplayPlacementHelper/
-            var displayRules = new ItemDisplayRuleDict(null);
-
-            // Then finally add it to R2API
-            ItemAPI.Add(new CustomItem(myItemDef, displayRules));
-
-            // But now we have defined an item, but it doesn't do anything yet. So we'll need to define that ourselves.
-            GlobalEventManager.onCharacterDeathGlobal += GlobalEventManager_onCharacterDeathGlobal;
-        }
-
-        private void MyFunc(On.RoR2.UI.HUD.orig_Awake orig, RoR2.UI.HUD self)
-        {
-            orig(self); // always call to avoid blocking other vanilla/mod elements
-            hud = self;
-            // create hud element object and set size and position
-            GameObject myObject = new GameObject("ExampleUIElement");
-            myObject.transform.SetParent(hud.allyCardManager.transform);
-            RectTransform rectTransform = myObject.AddComponent<RectTransform>();
-            rectTransform.anchorMin = Vector2.zero; // bottom left
-            rectTransform.anchorMax = Vector2.one; // top right
-            rectTransform.sizeDelta = Vector2.zero;
-            rectTransform.anchoredPosition = Vector2.zero;
-            // add sprite to object and position it
-            UnityEngine.UI.Image image = myObject.AddComponent<UnityEngine.UI.Image>();
-            image.sprite = Addressables.LoadAssetAsync<Sprite>("RoR2/Base/UI/texUIMainRect.png").WaitForCompletion();
-            // image.rectTransform.anchorMin = new Vector2((float)0.05, (float)0.85);
-            // image.rectTransform.anchorMax = new Vector2((float)0.10, (float)0.90);
-            // image.rectTransform.sizeDelta = Vector2.zero;
-            // image.rectTransform.anchoredPosition = Vector2.zero;
-        }
-
-        private void OnDestroy()
-        {
-            On.RoR2.UI.HUD.Awake -=MyFunc;
-        }
-
-        private void GlobalEventManager_onCharacterDeathGlobal(DamageReport report)
-        {
-            // If a character was killed by the world, we shouldn't do anything.
-            if (!report.attacker || !report.attackerBody)
+            public static ConfigEntry<int> TimesToPrintMessageOnStart;
+            public override string ArtifactName => "Artifact of Waves";
+            public override string ArtifactLangTokenName => "ARTIFACT_OF_WAVES";
+            public override string ArtifactDescription => "When enabled, allow setting of first stage in run.";
+            public override Sprite ArtifactEnabledIcon => Addressables.LoadAssetAsync<Sprite>("RoR2/Base/Common/MiscIcons/texMysteryIcon.png").WaitForCompletion();
+            public override Sprite ArtifactDisabledIcon => Addressables.LoadAssetAsync<Sprite>("RoR2/Base/Common/MiscIcons/texMysteryIcon.png").WaitForCompletion();
+            public override void Init(ConfigFile config)
             {
-                return;
+                CreateConfig(config);
+                CreateLang();
+                CreateArtifact();
+                Hooks();
             }
-
-            var attackerCharacterBody = report.attackerBody;
-
-            // We need an inventory to do check for our item
-            if (attackerCharacterBody.inventory)
+            private void CreateConfig(ConfigFile config)
             {
-                // Store the amount of our item we have
-                var garbCount = attackerCharacterBody.inventory.GetItemCount(myItemDef.itemIndex);
-                if (garbCount > 0 &&
-                    // Roll for our 50% chance.
-                    Util.CheckRoll(50, attackerCharacterBody.master))
+                TimesToPrintMessageOnStart = config.Bind<int>("Artifact: " + ArtifactName, "Times to Print Message in Chat", 1, "How many times should a message be printed to the chat on run start?");
+            }
+            public override void Hooks()
+            {
+                // Set hooks
+                Run.onRunStartGlobal += PrintMessageToChat; // message indicating artifact is enabled
+                // Run.onRunStartGlobal += Effect;
+                IL.RoR2.Run.Start += Effect;
+            }
+            // Effects of artifact (currently just prints message to chat)
+            private void PrintMessageToChat(Run run)
+            {
+                if(NetworkServer.active && ArtifactEnabled)
                 {
-                    // Since we passed all checks, we now give our attacker the cloaked buff.
-                    // Note how we are scaling the buff duration depending on the number of the custom item in our inventory.
-                    attackerCharacterBody.AddTimedBuff(RoR2Content.Buffs.Cloak, 3 + garbCount);
+                    for(int i = 0; i < TimesToPrintMessageOnStart.Value; i++)
+                    {
+                        Chat.AddMessage("~~~ waves artifact has been enabled ~~~");
+                    }
                 }
             }
+            // Effect of artifact, allows selection of first stage
+            // based on code written by KingEnderBrine for the
+            // ProperSave mod.
+            private void Effect(ILContext il) {
+                var c = new ILCursor(il);
+                c.EmitDelegate<Func<bool>>(() =>
+                {
+                    // Check if the artifact has been enabled
+                    if (ArtifactEnabled)
+                    {
+                        // Sets next stage to the currently selected stage
+                        try
+                        {
+                            var instance = Run.instance;
+                            #pragma warning disable Publicizer001
+                            instance.OnRuleBookUpdated(instance.networkRuleBookComponent);
+                            #pragma warning restore Publicizer001
+                            instance.seed = instance.GenerateSeedForNewRun();
+                            instance.selectedDifficulty = DifficultyIndex.Hard;
+                            instance.fixedTime = 0;
+                            instance.shopPortalCount = 0;
+                            #pragma warning disable Publicizer001
+                            instance.runStopwatch = new Run.RunStopwatch
+                            {
+                                offsetFromFixedTime = 0,
+                                isPaused = false
+                            };
+                            var rng = FormatterServices.GetUninitializedObject(typeof(Xoroshiro128Plus)) as Xoroshiro128Plus;
+                            instance.runRNG = rng;
+                            instance.nextStageRng = rng;
+                            instance.stageRngGenerator = rng;
+                            instance.GenerateStageRNG();
+                            
+                            instance.allowNewParticipants = true;
+                            #pragma warning restore Publicizer001
+                            UnityEngine.Object.DontDestroyOnLoad(instance.gameObject);
+                            var onlyInstancesList = NetworkUser.readOnlyInstancesList;
+                            for (int index = 0; index < onlyInstancesList.Count; ++index)
+                            {
+                                instance.OnUserAdded(onlyInstancesList[index]);
+                            }
+                            #pragma warning disable Publicizer001
+                            instance.allowNewParticipants = false;
+                            #pragma warning restore Publicizer001
+                            instance.stageClearCount = 0;
+                            instance.RecalculateDifficultyCoefficent();
+                            instance.nextStageScene = SceneCatalog.GetSceneDefFromSceneName(startingSceneCode);
+                            NetworkManager.singleton.ServerChangeScene(startingSceneCode);
+                            Log.Debug("Requested " + startingSceneCode + " scene.");
+                            #pragma warning disable Publicizer001
+                            instance.BuildUnlockAvailability();
+                            #pragma warning restore Publicizer001
+                            instance.BuildDropTable();
+                            if (onRunStartGlobalDelegate.GetValue(null) is MulticastDelegate onRunStartGlobal && onRunStartGlobal != null)
+                            {
+                                foreach (var handler in onRunStartGlobal.GetInvocationList())
+                                {
+                                    handler.Method.Invoke(handler.Target, new object[] { instance });
+                                }
+                            }
+                        }
+                        catch(Exception e)
+                        {
+                            Log.Warning("Unable to set starting stage to " + startingSceneCode + " scene.");
+                            Log.Warning(e);
+                        }
+                    }
+                    return ArtifactEnabled;
+                });
+                c.Emit(Mono.Cecil.Cil.OpCodes.Brfalse, c.Next);
+                c.Emit(Mono.Cecil.Cil.OpCodes.Ret);
+            }
+        }
+        /******************************************************************/
+        // Define persistent objects here
+        // Initialize list of artifacts
+        public List<ArtifactBase> Artifacts = new List<ArtifactBase>();
+        // Initialize lobby ui controller
+        private RoR2.UI.CharacterSelectController lobbyUI = null;
+        // Initialize lobbyButton and child GameObject
+        private GameObject lobbyButton = null;
+        GameObject lobbyButtonChild = null;
+        //
+        private static int startingSceneIndex = 0;
+        private static String startingSceneCode = "ancientloft";
+        //
+        private static readonly FieldInfo onRunStartGlobalDelegate = typeof(Run).GetField(nameof(Run.onRunStartGlobal), BindingFlags.NonPublic | BindingFlags.Static);
+        /******************************************************************/
+        // Runs at game initialization - use for initializing mod
+        public void Awake()
+        {
+            // Start logger
+            Log.Init(Logger);
+
+            // Modded artifact startup code
+            var ArtifactTypes = Assembly.GetExecutingAssembly().GetTypes().Where(type => !type.IsAbstract && type.IsSubclassOf(typeof(ArtifactBase)));
+            foreach (var artifactType in ArtifactTypes)
+            {
+                ArtifactBase artifact = (ArtifactBase)Activator.CreateInstance(artifactType);
+                if (ValidateArtifact(artifact, Artifacts))
+                {
+                    artifact.Init(Config);
+                }
+            }
+
+            // Add Hooks
+            // adds new lobby ui button
+            On.RoR2.UI.CharacterSelectController.Awake += CreateLobbyUI;
+            // disables pod drop animation on run start
+            On.RoR2.Stage.Start += (orig, self) =>
+            {
+                self.SetFieldValue("usePod", false);
+                orig(self);
+            };
         }
 
-        // The Update() method is run on every frame of the game.
+        // Runs on each frame - use for continuous processes in mod
         private void Update()
         {
-            // This if statement checks if the player has currently pressed F2.
-            if (Input.GetKeyDown(KeyCode.F2))
+            // add stuff here
+            
+        }
+
+        // Clean up note - not sure if this works yet
+        private void OnDestroy()
+        {
+            // Remove Hooks
+            On.RoR2.UI.CharacterSelectController.Awake -= CreateLobbyUI;
+        }
+        // Custom methods
+        // Validate artifact method
+        public bool ValidateArtifact(ArtifactBase artifact, List<ArtifactBase> artifactList)
+        {
+            var enabled = Config.Bind<bool>("Artifact: " + artifact.ArtifactName, "Enable Artifact?", true, "Should this artifact appear for selection?").Value;
+            if (enabled)
             {
-                // Get the player body to use a position:
-                var transform = PlayerCharacterMasterController.instances[0].master.GetBodyObject().transform;
-
-                // And then drop our defined item in front of the player.
-
-                Log.Info($"Player pressed F2. Spawning our custom item at coordinates {transform.position}");
-                PickupDropletController.CreatePickupDroplet(PickupCatalog.FindPickupIndex(myItemDef.itemIndex), transform.position, transform.forward * 20f);
+                artifactList.Add(artifact);
             }
+            return enabled;
+        }
+        // Create lobby ui elements
+        private void CreateLobbyUI(On.RoR2.UI.CharacterSelectController.orig_Awake orig, RoR2.UI.CharacterSelectController self)
+        {
+            // reset stage select option
+            startingSceneIndex = 0;
+            startingSceneCode = "";
+            lobbyUI = self;
+            // Try to load ui components, and catch/log on error
+            try
+            {
+                lobbyButton = new GameObject("StageSelectButton");
+                lobbyButton.transform.SetParent(lobbyUI.transform);
+                RectTransform rectTransform = lobbyButton.AddComponent<RectTransform>();
+                rectTransform.anchorMin = Vector2.zero; // bottom left
+                rectTransform.anchorMax = Vector2.one; // top right
+                rectTransform.sizeDelta = Vector2.zero;
+                rectTransform.anchoredPosition = Vector2.zero;
+                
+                // Make visual component of button
+                UnityEngine.UI.Image lobbyButtonImage = lobbyButton.AddComponent<UnityEngine.UI.Image>();
+                lobbyButtonImage.sprite = Addressables.LoadAssetAsync<Sprite>("RoR2/Base/UI/texUILaunchButton.png").WaitForCompletion();
+                // Position the button
+                lobbyButtonImage.rectTransform.anchorMin = new Vector2((float)0.510, (float)0.411);
+                lobbyButtonImage.rectTransform.anchorMax = new Vector2((float)0.515, (float)0.413);
+                // Add text to button
+                lobbyButtonChild = new GameObject("StageSelectText");
+                lobbyButtonChild.transform.SetParent(lobbyButtonImage.transform);
+                TextMeshProUGUI lobbyButtonChildText = lobbyButtonChild.AddComponent<TextMeshProUGUI>();
+                lobbyButtonChildText.name = "LobbyButtonText";
+                lobbyButtonChildText.text = "Default";
+                lobbyButtonChildText.color = UnityEngine.Color.white;
+                lobbyButtonChildText.fontSize = 3;
+                lobbyButtonChildText.autoSizeTextContainer = true;
+                lobbyButtonChildText.rectTransform.anchorMin = Vector2.zero;
+                lobbyButtonChildText.rectTransform.anchorMax = Vector2.one;
+                lobbyButtonChildText.ForceMeshUpdate();
+                // Add functionality to button
+                UnityEngine.UI.Button lobbyButtonButton = lobbyButton.AddComponent<UnityEngine.UI.Button>();
+                lobbyButtonButton.onClick.AddListener(LobbyButtonClick);
+                // Log addition for debugging
+                Log.Debug("Completed adding lobby buttons");
+                Log.Debug(lobbyUI.transform.position.x + " " + lobbyUI.transform.position.y + " " + lobbyUI.transform.position.z);
+            }
+            catch (Exception e)
+            {
+                // Log ui loading errors
+                Log.Warning("Failed while adding lobby buttons");
+                Log.Error(e);
+            }
+            // Run other code
+            orig(self);
+        }
+        private void LobbyButtonClick()
+        {
+            // Log button click event for debugging
+            Log.Debug("Lobby button clicked.");
+            // Open stage selector ui
+            String lobbyButtonString = "";
+            switch (startingSceneIndex)
+            {
+                case 0:
+                    lobbyButtonString = "Aphelian Sanctuary";
+                    startingSceneIndex++;
+                    startingSceneCode = "ancientloft";
+                    break;
+                case 1:
+                    lobbyButtonString = "Titanic Plains";
+                    startingSceneIndex++;
+                    startingSceneCode = "golemplains";
+                    break;
+                case 2:
+                    lobbyButtonString = "Distant Roost";
+                    startingSceneIndex++;
+                    startingSceneCode = "blackbeach";
+                    break;
+                case 3:
+                    lobbyButtonString = "Wetland Aspect";
+                    startingSceneIndex++;
+                    startingSceneCode = "foggyswamp";
+                    break;
+                case 4:
+                    lobbyButtonString = "Rallypoint Delta";
+                    startingSceneIndex++;
+                    startingSceneCode = "frozenwall";
+                    break;
+                case 5:
+                    lobbyButtonString = "Abyssal Depths";
+                    startingSceneIndex++;
+                    startingSceneCode = "dampcavesimple";
+                    break;
+                case 6:
+                    lobbyButtonString = "Abandoned Aqueduct";
+                    startingSceneIndex++;
+                    startingSceneCode = "goolake";
+                    break;
+                case 7:
+                    lobbyButtonString = "Sundered Grove";
+                    startingSceneIndex++;
+                    startingSceneCode = "rootjungle";
+                    break;
+                case 8:
+                    lobbyButtonString = "Siren's Call";
+                    startingSceneIndex++;
+                    startingSceneCode = "shipgraveyard";
+                    break;
+                case 9:
+                    lobbyButtonString = "Siphoned Forest";
+                    startingSceneIndex++;
+                    startingSceneCode = "snowyforest";
+                    break;
+                case 10:
+                    lobbyButtonString = "Sulfur Pools";
+                    startingSceneIndex++;
+                    startingSceneCode = "sulfurpools";
+                    break;
+                case 11:
+                    lobbyButtonString = "Scorched Acres";
+                    startingSceneIndex++;
+                    startingSceneCode = "wispgraveyard";
+                    break;
+                case 12:
+                    lobbyButtonString = "Sky Meadow";
+                    startingSceneIndex = 0;
+                    startingSceneCode = "skymeadow";
+                    break;
+            }
+            TextMeshProUGUI lobbyButtonText = lobbyButtonChild.GetComponent<TextMeshProUGUI>();
+            lobbyButtonText.text = lobbyButtonString;
+            lobbyButtonText.ForceMeshUpdate();
+            Log.Debug(lobbyButtonString + " code: " + startingSceneCode + " index: " + startingSceneIndex);
         }
     }
 }
