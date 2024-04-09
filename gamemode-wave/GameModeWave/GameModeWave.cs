@@ -34,6 +34,7 @@ using MonoMod.Cil;
 using System.Reflection.Emit;
 using EntityStates.Missions.ArtifactWorld.TrialController;
 using System.Runtime.Serialization;
+using System.Diagnostics.Tracing;
 
 /***
 description: RoR2 Plugin for Adding a Wave-Based Game-Mode
@@ -53,7 +54,7 @@ namespace GameModeWave
     // This attribute is required, and lists metadata for your plugin.
     [BepInPlugin(PluginGUID, PluginName, PluginVersion)]
 
-    // This is the main declaration of our plugin class.
+    // This is the main declaration of the plugin class.
     public class GameModeWave : BaseUnityPlugin
     {
         // Plugin GUID and other metadata
@@ -86,8 +87,8 @@ namespace GameModeWave
             {
                 // Set hooks
                 Run.onRunStartGlobal += PrintMessageToChat; // message indicating artifact is enabled
-                // Run.onRunStartGlobal += Effect;
-                IL.RoR2.Run.Start += Effect;
+                IL.RoR2.Run.Start += Effect; // change run start behaviour
+                On.RoR2.Run.Update += RunController;// change overall run behaviour
             }
             // Effects of artifact (currently just prints message to chat)
             private void PrintMessageToChat(Run run)
@@ -171,6 +172,51 @@ namespace GameModeWave
                 });
                 c.Emit(Mono.Cecil.Cil.OpCodes.Brfalse, c.Next);
                 c.Emit(Mono.Cecil.Cil.OpCodes.Ret);
+            }
+            // method for changing behaviour of a run
+            private void RunController(On.RoR2.Run.orig_Update orig, RoR2.Run self)
+            {
+                // run artifact actions
+                if(Input.GetKeyDown(KeyCode.F2))
+                {
+                    // forces a beetle queen to spawn at the player's location
+                    try
+                    {
+                        RoR2.CharacterSpawnCard bossSpawnCard = Addressables.LoadAssetAsync<RoR2.CharacterSpawnCard>("RoR2/Base/Beetle/cscBeetleQueen.asset").WaitForCompletion();
+                        Transform playerTransform = PlayerCharacterMasterController.instances[0].master.GetBodyObject().transform;
+                        RoR2.DirectorPlacementRule placementRule = new()
+                        {
+                            placementMode = RoR2.DirectorPlacementRule.PlacementMode.Approximate,
+                            spawnOnTarget = playerTransform,
+                            position = playerTransform.position,
+                            minDistance = 25,
+                            maxDistance = 40,
+                            preventOverhead = false,
+                        };
+                        Log.Debug("Loaded spawn card and created placement rule.");
+                        try
+                        {
+                            RoR2.DirectorSpawnRequest spawnRequest = new(bossSpawnCard, placementRule, self.runRNG);
+                            Quaternion quaternion = playerTransform.localRotation;
+                            spawnRequest.ignoreTeamMemberLimit = true;
+                            spawnRequest.teamIndexOverride = TeamIndex.Monster;
+                            RoR2.SpawnCard.SpawnResult spawnResult = bossSpawnCard.DoSpawn(placementRule.targetPosition, quaternion, spawnRequest);
+                            Log.Debug("Spawned entity at position: " + placementRule.targetPosition.ToString());
+                        }
+                        catch(Exception e)
+                        {
+                            Log.Warning("Unable to spawn entity at position: " + placementRule.targetPosition.ToString());
+                            Log.Warning(e);
+                        }
+                    }
+                    catch(Exception e)
+                    {
+                        Log.Warning("Failed to load spawn card and/or create placement rule");
+                        Log.Warning(e);
+                    }                    
+                }
+                // run rest of code from other sources
+                orig(self);
             }
         }
         /******************************************************************/
