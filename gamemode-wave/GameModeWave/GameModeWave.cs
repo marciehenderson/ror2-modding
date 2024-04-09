@@ -72,6 +72,33 @@ namespace GameModeWave
             public override string ArtifactDescription => "When enabled, allow setting of first stage in run.";
             public override Sprite ArtifactEnabledIcon => Addressables.LoadAssetAsync<Sprite>("RoR2/Base/Common/MiscIcons/texMysteryIcon.png").WaitForCompletion();
             public override Sprite ArtifactDisabledIcon => Addressables.LoadAssetAsync<Sprite>("RoR2/Base/Common/MiscIcons/texMysteryIcon.png").WaitForCompletion();
+            private const float BOSS_SPAWN_PERIOD = 60F;
+            private const float SPAWN_INCREASE_PERIOD = 300F;
+            private const float SUPER_BOSS_START = 20F;
+            private readonly string[] BOSS_SPAWNCARD_REFERENCE = 
+            {
+                "RoR2/Base/Beetle/cscBeetleQueen.asset",
+                "RoR2/Base/ClayBoss/cscClayBoss.asset",
+                "RoR2/Base/Gravekeeper/cscGravekeeper.asset",
+                "RoR2/Base/Grandparent/cscGrandparent.asset",
+                "RoR2/Base/ImpBoss/cscImpBoss.asset",
+                "RoR2/Base/RoboBallBoss/cscRoboBallBoss.asset",
+                "RoR2/Base/Titan/cscTitanBlackBeach.asset",
+                "RoR2/Base/Vagrant/cscVagrant.asset",
+                "RoR2/Base/MagmaWorm/cscMagmaWorm.asset",
+                "RoR2/Base/Nullifier/cscNullifier.asset",
+                //"RoR2/DLC1/MajorAndMinorConstruct/cscMajorConstruct.asset", //unused boss
+            };
+            private readonly string[] SUPER_SPAWNCARD_REFERENCE =
+            {
+                "RoR2/Base/ElectricWorm/cscElectricWorm.asset",
+                "RoR2/Base/RoboBallBoss/cscSuperRoboBallBoss.asset",
+                "RoR2/Base/Titan/cscTitanGold.asset",
+                "RoR2/Base/Scav/cscScavBoss.asset",
+                "RoR2/DLC1/VoidJailer/cscVoidJailer.asset",
+                "RoR2/DLC1/VoidMegaCrab/cscVoidMegaCrab.asset",
+                "RoR2/DLC1/GameModes/InfiniteTowerRun/InfiniteTowerAssets/cscBrotherIT.asset",
+            };
             public override void Init(ConfigFile config)
             {
                 CreateConfig(config);
@@ -87,8 +114,9 @@ namespace GameModeWave
             {
                 // Set hooks
                 Run.onRunStartGlobal += PrintMessageToChat; // message indicating artifact is enabled
-                IL.RoR2.Run.Start += Effect; // change run start behaviour
-                On.RoR2.Run.Update += RunController;// change overall run behaviour
+                IL.RoR2.Run.Start += StartController; // change run start behaviour
+                On.RoR2.Run.Update += RunController; // change overall run behaviour
+                On.RoR2.GlobalEventManager.OnCharacterDeath += DeathController; // do stuff on death events
             }
             // Effects of artifact (currently just prints message to chat)
             private void PrintMessageToChat(Run run)
@@ -104,7 +132,7 @@ namespace GameModeWave
             // Effect of artifact, allows selection of first stage
             // based on code written by KingEnderBrine for the
             // ProperSave mod.
-            private void Effect(ILContext il) {
+            private void StartController(ILContext il) {
                 var c = new ILCursor(il);
                 c.EmitDelegate<Func<bool>>(() =>
                 {
@@ -176,47 +204,118 @@ namespace GameModeWave
             // method for changing behaviour of a run
             private void RunController(On.RoR2.Run.orig_Update orig, RoR2.Run self)
             {
-                // run artifact actions
-                if(Input.GetKeyDown(KeyCode.F2))
+                if(ArtifactEnabled)
                 {
-                    // forces a beetle queen to spawn at the player's location
-                    try
+                    // spawn boss
+                    if(self.time - previousTime > BOSS_SPAWN_PERIOD)
                     {
-                        RoR2.CharacterSpawnCard bossSpawnCard = Addressables.LoadAssetAsync<RoR2.CharacterSpawnCard>("RoR2/Base/Beetle/cscBeetleQueen.asset").WaitForCompletion();
-                        Transform playerTransform = PlayerCharacterMasterController.instances[0].master.GetBodyObject().transform;
-                        RoR2.DirectorPlacementRule placementRule = new()
+                        previousTime = self.time;
+                        // increase number of spawns
+                        var spawnNumber = (int)(self.time / SPAWN_INCREASE_PERIOD) + 1;
+                        for (var i = 0; i < spawnNumber; i++)
                         {
-                            placementMode = RoR2.DirectorPlacementRule.PlacementMode.Approximate,
-                            spawnOnTarget = playerTransform,
-                            position = playerTransform.position,
-                            minDistance = 25,
-                            maxDistance = 40,
-                            preventOverhead = false,
-                        };
-                        Log.Debug("Loaded spawn card and created placement rule.");
-                        try
+                            var cardGroup = BOSS_SPAWNCARD_REFERENCE;
+                            // add chance of spawning super bosses after period of time
+                            if(self.time > BOSS_SPAWN_PERIOD * SUPER_BOSS_START)
+                            {
+                                cardGroup.Concat(SUPER_SPAWNCARD_REFERENCE);
+                            }
+                            var cardReference = cardGroup[UnityEngine.Random.RandomRangeInt(0, cardGroup.Length)];
+                            try
+                            {
+                                RoR2.CharacterSpawnCard bossSpawnCard = Addressables.LoadAssetAsync<RoR2.CharacterSpawnCard>(cardReference).WaitForCompletion();
+                                Transform playerTransform = PlayerCharacterMasterController.instances[0].master.GetBodyObject().transform;
+                                RoR2.DirectorPlacementRule placementRule = new()
+                                {
+                                    placementMode = RoR2.DirectorPlacementRule.PlacementMode.Random,
+                                    spawnOnTarget = playerTransform,
+                                    position = playerTransform.position,
+                                    minDistance = 25,
+                                    maxDistance = 40,
+                                    preventOverhead = false,
+                                };
+                                Log.Debug("Loaded spawn card and created placement rule.");
+                                try
+                                {
+                                    RoR2.DirectorSpawnRequest spawnRequest = new(bossSpawnCard, placementRule, self.runRNG);
+                                    Quaternion quaternion = playerTransform.localRotation;
+                                    spawnRequest.ignoreTeamMemberLimit = true;
+                                    spawnRequest.teamIndexOverride = TeamIndex.Monster;
+                                    RoR2.SpawnCard.SpawnResult spawnResult = bossSpawnCard.DoSpawn(placementRule.targetPosition, quaternion, spawnRequest);
+                                    Log.Debug("Spawned entity at position: " + placementRule.targetPosition.ToString());
+                                }
+                                catch(Exception e)
+                                {
+                                    Log.Warning("Unable to spawn entity at position: " + placementRule.targetPosition.ToString());
+                                    Log.Warning(e);
+                                }
+                            }
+                            catch(Exception e)
+                            {
+                                Log.Warning("Failed to load spawn card and/or create placement rule");
+                                Log.Warning(e);
+                            }
+                            // if a super boss is spawned, dont spawn any more
+                            if(SUPER_SPAWNCARD_REFERENCE.Contains(cardReference))
+                            {
+                                break;// end looping
+                            }
+                        }             
+                    }
+                    // run rest of code from other sources
+                    orig(self);
+                } 
+            }
+            private void DeathController(On.RoR2.GlobalEventManager.orig_OnCharacterDeath orig, RoR2.GlobalEventManager self, RoR2.DamageReport report)
+            {
+                if(ArtifactEnabled)
+                {
+                    // on enemy defeats
+                    if(report.victimTeamIndex != TeamIndex.Player)
+                    {
+                        // equation for calculating appropriate reward chances
+                        var rfMax = 4F;
+                        var rewardFactor = 
+                        (report.victimIsBoss?1:0)     * 1.4F +
+                        (report.victimIsChampion?1:0) * 0.8F +
+                        (report.victimIsElite?1:0)    * 0.6F +
+                                                        1.2F ;
+                        // check if reward should drop
+                        if(RoR2.Util.CheckRoll(rewardFactor/rfMax*100F, report.attackerBody.master))
                         {
-                            RoR2.DirectorSpawnRequest spawnRequest = new(bossSpawnCard, placementRule, self.runRNG);
-                            Quaternion quaternion = playerTransform.localRotation;
-                            spawnRequest.ignoreTeamMemberLimit = true;
-                            spawnRequest.teamIndexOverride = TeamIndex.Monster;
-                            RoR2.SpawnCard.SpawnResult spawnResult = bossSpawnCard.DoSpawn(placementRule.targetPosition, quaternion, spawnRequest);
-                            Log.Debug("Spawned entity at position: " + placementRule.targetPosition.ToString());
-                        }
-                        catch(Exception e)
-                        {
-                            Log.Warning("Unable to spawn entity at position: " + placementRule.targetPosition.ToString());
-                            Log.Warning(e);
+                            // choose reward tier (common=0, rare=1, legendary=2)
+                            var tierIndex = 0;
+                            for(var i = 0; i <= tierIndex; i++)
+                            {
+                                if(RoR2.Util.CheckRoll(rewardFactor/rfMax*100F, report.attackerBody.master) && tierIndex < 2)
+                                {
+                                    // upgrade tier on success with a limit of two upgrades
+                                    tierIndex++;
+                                }
+                            }
+                            // drop item
+                            var itemTransform = report.victimBody.master.GetBodyObject().transform;
+                            List<ItemIndex> itemList = new();
+                            switch (tierIndex)
+                            {
+                                case 0:
+                                    itemList = RoR2.ItemCatalog.tier1ItemList;
+                                    break;
+                                case 1:
+                                    itemList = RoR2.ItemCatalog.tier2ItemList;
+                                    break;
+                                case 2:
+                                    itemList = RoR2.ItemCatalog.tier3ItemList;
+                                    break;
+                            }
+                            var itemIndex = itemList[UnityEngine.Random.RandomRangeInt(0, itemList.Count)];
+                            PickupDropletController.CreatePickupDroplet(PickupCatalog.FindPickupIndex(itemIndex), itemTransform.position, itemTransform.forward * 20F);
+                            Log.Debug("Item Dropped: " + itemIndex);
                         }
                     }
-                    catch(Exception e)
-                    {
-                        Log.Warning("Failed to load spawn card and/or create placement rule");
-                        Log.Warning(e);
-                    }                    
+                    // back to other code
+                    orig(self, report);
                 }
-                // run rest of code from other sources
-                orig(self);
             }
         }
         /******************************************************************/
@@ -228,11 +327,12 @@ namespace GameModeWave
         // Initialize lobbyButton and child GameObject
         private GameObject lobbyButton = null;
         GameObject lobbyButtonChild = null;
-        //
+        // Initialize run starting scene variables
         private static int startingSceneIndex = 0;
         private static String startingSceneCode = "ancientloft";
-        //
+        // Initialize field info used in replacing the code at run start
         private static readonly FieldInfo onRunStartGlobalDelegate = typeof(Run).GetField(nameof(Run.onRunStartGlobal), BindingFlags.NonPublic | BindingFlags.Static);
+        private static float previousTime = 0;
         /******************************************************************/
         // Runs at game initialization - use for initializing mod
         public void Awake()
