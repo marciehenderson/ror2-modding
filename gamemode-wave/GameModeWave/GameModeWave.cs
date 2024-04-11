@@ -35,6 +35,8 @@ using System.Reflection.Emit;
 using EntityStates.Missions.ArtifactWorld.TrialController;
 using System.Runtime.Serialization;
 using System.Diagnostics.Tracing;
+using System.IO;
+using System.Collections;
 
 /***
 description: RoR2 Plugin for Adding a Wave-Based Game-Mode
@@ -61,20 +63,25 @@ namespace GameModeWave
         public const string PluginGUID = PluginAuthor + "." + PluginName;
         public const string PluginAuthor = "MarcieHenderson";
         public const string PluginName = "GameModeWave";
-        public const string PluginVersion = "0.0.4"; // change with each commit
+        public const string PluginVersion = "0.0.5"; // change with each commit
 
         // Specify GameModeArtifact class attributes and methods
         class GameModeArtifact : ArtifactBase
         {
+            public static ConfigFile config;
             public static ConfigEntry<int> TimesToPrintMessageOnStart;
             public override string ArtifactName => "Artifact of Waves";
             public override string ArtifactLangTokenName => "ARTIFACT_OF_WAVES";
             public override string ArtifactDescription => "When enabled, allow setting of first stage in run.";
             public override Sprite ArtifactEnabledIcon => Addressables.LoadAssetAsync<Sprite>("RoR2/Base/Common/MiscIcons/texMysteryIcon.png").WaitForCompletion();
             public override Sprite ArtifactDisabledIcon => Addressables.LoadAssetAsync<Sprite>("RoR2/Base/Common/MiscIcons/texMysteryIcon.png").WaitForCompletion();
+            // Variables
+            private static Dictionary<string, RoR2.SpawnCard> DisabledInteractableSpawnCards = new Dictionary<string, RoR2.SpawnCard>();
+            // Constants
             private const float BOSS_SPAWN_PERIOD = 60F;
             private const float SPAWN_INCREASE_PERIOD = 300F;
             private const float SUPER_BOSS_START = 20F;
+            // lists of boss reference codes
             private readonly string[] BOSS_SPAWNCARD_REFERENCE = 
             {
                 "RoR2/Base/Beetle/cscBeetleQueen.asset",
@@ -99,9 +106,19 @@ namespace GameModeWave
                 "RoR2/DLC1/VoidMegaCrab/cscVoidMegaCrab.asset",
                 "RoR2/DLC1/GameModes/InfiniteTowerRun/InfiniteTowerAssets/cscBrotherIT.asset",
             };
+            private readonly Dictionary<string, string> ENABLED_INTERACTABLE_SPAWN_CARDS = new()
+            {
+                {"copy_common", Addressables.LoadAssetAsync<RoR2.SpawnCard>("RoR2/Base/Duplicator/iscDuplicator.asset").WaitForCompletion().name},
+                {"copy_rare", Addressables.LoadAssetAsync<RoR2.SpawnCard>("RoR2/Base/DuplicatorLarge/iscDuplicatorLarge.asset").WaitForCompletion().name},
+                {"copy_legend", Addressables.LoadAssetAsync<RoR2.SpawnCard>("RoR2/Base/DuplicatorMilitary/iscDuplicatorMilitary.asset").WaitForCompletion().name},
+                {"copy_boss", Addressables.LoadAssetAsync<RoR2.SpawnCard>("RoR2/Base/DuplicatorWild/iscDuplicatorWild.asset").WaitForCompletion().name},
+                {"scrapper", Addressables.LoadAssetAsync<RoR2.SpawnCard>("RoR2/Base/Scrapper/iscScrapper.asset").WaitForCompletion().name},
+                {"turret", Addressables.LoadAssetAsync<RoR2.SpawnCard>("RoR2/Base/Drones/iscBrokenTurret1.asset").WaitForCompletion().name},
+            };
             public override void Init(ConfigFile config)
             {
-                CreateConfig(config);
+                GameModeArtifact.config = config;
+                CreateConfig(GameModeArtifact.config);
                 CreateLang();
                 CreateArtifact();
                 Hooks();
@@ -117,6 +134,9 @@ namespace GameModeWave
                 IL.RoR2.Run.Start += StartController; // change run start behaviour
                 On.RoR2.Run.Update += RunController; // change overall run behaviour
                 On.RoR2.GlobalEventManager.OnCharacterDeath += DeathController; // do stuff on death events
+                RoR2.SceneDirector.onGenerateInteractableCardSelection += InteractableController0;
+                On.RoR2.SceneDirector.GenerateInteractableCardSelection += InteractableController1; // get information from the interactable card selection
+                On.RoR2.DirectorCard.IsAvailable += CardController; // change the behavior of card selection for interactables
             }
             // Effects of artifact (currently just prints message to chat)
             private void PrintMessageToChat(Run run)
@@ -157,11 +177,11 @@ namespace GameModeWave
                                 isPaused = false
                             };
                             var rng = FormatterServices.GetUninitializedObject(typeof(Xoroshiro128Plus)) as Xoroshiro128Plus;
+                            rng.ResetSeed(instance.seed); // set rng seed to instance seed
                             instance.runRNG = rng;
                             instance.nextStageRng = rng;
                             instance.stageRngGenerator = rng;
                             instance.GenerateStageRNG();
-                            
                             instance.allowNewParticipants = true;
                             #pragma warning restore Publicizer001
                             UnityEngine.Object.DontDestroyOnLoad(instance.gameObject);
@@ -224,12 +244,13 @@ namespace GameModeWave
                             try
                             {
                                 RoR2.CharacterSpawnCard bossSpawnCard = Addressables.LoadAssetAsync<RoR2.CharacterSpawnCard>(cardReference).WaitForCompletion();
-                                Transform playerTransform = PlayerCharacterMasterController.instances[0].master.GetBodyObject().transform;
+                                // select random spawn point from available instances
+                                Transform spawnTransform = RoR2.SpawnPoint.readOnlyInstancesList[UnityEngine.Random.RandomRangeInt(0, RoR2.SpawnPoint.readOnlyInstancesList.Count())].transform;
                                 RoR2.DirectorPlacementRule placementRule = new()
                                 {
-                                    placementMode = RoR2.DirectorPlacementRule.PlacementMode.Random,
-                                    spawnOnTarget = playerTransform,
-                                    position = playerTransform.position,
+                                    placementMode = RoR2.DirectorPlacementRule.PlacementMode.Approximate,
+                                    spawnOnTarget = spawnTransform,
+                                    position = spawnTransform.position,
                                     minDistance = 25,
                                     maxDistance = 40,
                                     preventOverhead = false,
@@ -238,7 +259,7 @@ namespace GameModeWave
                                 try
                                 {
                                     RoR2.DirectorSpawnRequest spawnRequest = new(bossSpawnCard, placementRule, self.runRNG);
-                                    Quaternion quaternion = playerTransform.localRotation;
+                                    Quaternion quaternion = spawnTransform.localRotation;
                                     spawnRequest.ignoreTeamMemberLimit = true;
                                     spawnRequest.teamIndexOverride = TeamIndex.Monster;
                                     RoR2.SpawnCard.SpawnResult spawnResult = bossSpawnCard.DoSpawn(placementRule.targetPosition, quaternion, spawnRequest);
@@ -266,56 +287,153 @@ namespace GameModeWave
                     orig(self);
                 } 
             }
+            // method for adding function on character deaths
             private void DeathController(On.RoR2.GlobalEventManager.orig_OnCharacterDeath orig, RoR2.GlobalEventManager self, RoR2.DamageReport report)
             {
                 if(ArtifactEnabled)
                 {
-                    // on enemy defeats
-                    if(report.victimTeamIndex != TeamIndex.Player)
+                    try
                     {
-                        // equation for calculating appropriate reward chances
-                        var rfMax = 4F;
-                        var rewardFactor = 
-                        (report.victimIsBoss?1:0)     * 1.4F +
-                        (report.victimIsChampion?1:0) * 0.8F +
-                        (report.victimIsElite?1:0)    * 0.6F +
-                                                        1.2F ;
-                        // check if reward should drop
-                        if(RoR2.Util.CheckRoll(rewardFactor/rfMax*100F, report.attackerBody.master))
+                        // on end of enemy team member instance
+                        if
+                        (
+                            report.victimTeamIndex == TeamIndex.Monster ||
+                            report.victimTeamIndex == TeamIndex.Void ||
+                            report.victimTeamIndex == TeamIndex.Lunar
+                        )
                         {
-                            // choose reward tier (common=0, rare=1, legendary=2)
-                            var tierIndex = 0;
-                            for(var i = 0; i <= tierIndex; i++)
+                            // equation for calculating appropriate reward chances
+                            var rfMax = 4F;
+                            var rewardFactor = 
+                            (report.victimIsBoss?1:0)     * 1.6F +
+                            (report.victimIsChampion?1:0) * 1.0F +
+                            (report.victimIsElite?1:0)    * 0.8F +
+                                                            0.6F ;
+                            // check if reward should drop
+                            if(RoR2.Util.CheckRoll(rewardFactor/rfMax*100F, report.attackerBody.master))
                             {
-                                if(RoR2.Util.CheckRoll(rewardFactor/rfMax*100F, report.attackerBody.master) && tierIndex < 2)
+                                // choose reward tier (common=0, rare=1, legendary=2)
+                                var tierIndex = 0;
+                                for(var i = 0; i <= tierIndex; i++)
                                 {
-                                    // upgrade tier on success with a limit of two upgrades
-                                    tierIndex++;
+                                    if(RoR2.Util.CheckRoll(rewardFactor/rfMax*100F, report.attackerBody.master) && tierIndex < 2)
+                                    {
+                                        // upgrade tier on success with a limit of two upgrades
+                                        tierIndex++;
+                                    }
+                                }
+                                if(tierIndex > 1)
+                                {
+                                    // flip a coin to see whether to give boss, or legendary scrap
+                                    if(RoR2.Util.CheckRoll(50F))
+                                    {
+                                        tierIndex = 3;
+                                    }
+                                }
+                                // drop item
+                                var itemTransform = report.victimBody.master.GetBodyObject().transform;
+                                RoR2.ItemIndex itemIndex = new();
+                                switch (tierIndex)
+                                {
+                                    case 1:
+                                        itemIndex = Addressables.LoadAssetAsync<RoR2.ItemDef>("RoR2/Base/Scrap/ScrapGreen.asset").WaitForCompletion().itemIndex;
+                                        break;
+                                    case 2:
+                                        itemIndex = Addressables.LoadAssetAsync<RoR2.ItemDef>("RoR2/Base/Scrap/ScrapRed.asset").WaitForCompletion().itemIndex;
+                                        break;
+                                    case 3:
+                                        itemIndex = Addressables.LoadAssetAsync<RoR2.ItemDef>("RoR2/Base/Scrap/ScrapYellow.asset").WaitForCompletion().itemIndex;
+                                        break;
+                                    default:
+                                        // also case 0
+                                        itemIndex = Addressables.LoadAssetAsync<RoR2.ItemDef>("RoR2/Base/Scrap/ScrapWhite.asset").WaitForCompletion().itemIndex;
+                                        break;
+                                }
+                                PickupDropletController.CreatePickupDroplet(PickupCatalog.FindPickupIndex(itemIndex), itemTransform.position, itemTransform.forward * 20F);
+                                Log.Debug("Item Dropped: " + itemIndex);
+                            }
+                        }
+                        // back to other code
+                        orig(self, report);
+                    }
+                    catch(Exception e)
+                    {
+                        Log.Warning("Error while dropping specified pickup.");
+                        Log.Warning(e);
+                    }
+                }
+            }
+            // Methods for gathering disabled interactables (based on the ContentDisabler mod by William758)
+            private void InteractableController0 (RoR2.SceneDirector sceneDirector, RoR2.DirectorCardCategorySelection dccs)
+            {
+                Log.Debug("InteractableController0 - Start");
+                if(ArtifactEnabled)
+                {
+                    foreach(var category in dccs.categories)
+                    {
+                        foreach(var card in category.cards)
+                        {
+                            try
+                            {
+                                var spawnCard = card.spawnCard;
+                                // check the spawn card name against the dictionary of enabled names
+                                if(!ENABLED_INTERACTABLE_SPAWN_CARDS.ContainsValue(spawnCard.name))
+                                {
+                                    // If an interactable should not be spawned, add it to
+                                    // the disabled interactable spawn cards dictionary
+                                    if(!DisabledInteractableSpawnCards.ContainsKey(spawnCard.name))
+                                    {
+                                        // Only follow through with the addition if it hasn't been added yet
+                                        DisabledInteractableSpawnCards.Add(spawnCard.name, spawnCard);
+                                        Log.Debug("Added " + spawnCard.name + " to the disabled interactables list.");
+                                    }
+                                    else
+                                    {
+                                        Log.Debug(spawnCard.name + " already exists in the disabled interactables list.");
+                                    }
                                 }
                             }
-                            // drop item
-                            var itemTransform = report.victimBody.master.GetBodyObject().transform;
-                            List<ItemIndex> itemList = new();
-                            switch (tierIndex)
+                            catch(Exception e)
                             {
-                                case 0:
-                                    itemList = RoR2.ItemCatalog.tier1ItemList;
-                                    break;
-                                case 1:
-                                    itemList = RoR2.ItemCatalog.tier2ItemList;
-                                    break;
-                                case 2:
-                                    itemList = RoR2.ItemCatalog.tier3ItemList;
-                                    break;
+                                Log.Warning("Unable to read spawn card from category: " + category.name);
+                                Log.Warning(e);
                             }
-                            var itemIndex = itemList[UnityEngine.Random.RandomRangeInt(0, itemList.Count)];
-                            PickupDropletController.CreatePickupDroplet(PickupCatalog.FindPickupIndex(itemIndex), itemTransform.position, itemTransform.forward * 20F);
-                            Log.Debug("Item Dropped: " + itemIndex);
                         }
                     }
-                    // back to other code
-                    orig(self, report);
                 }
+                Log.Debug("InteractableController0 - End");
+            }
+            private WeightedSelection<RoR2.DirectorCard> InteractableController1 (On.RoR2.SceneDirector.orig_GenerateInteractableCardSelection orig, RoR2.SceneDirector self)
+            {
+                return orig(self);
+            }
+            // Method for intervening in the card selection process
+            private bool CardController (On.RoR2.DirectorCard.orig_IsAvailable orig, RoR2.DirectorCard self)
+            {
+                // Only change behaviour if the artifact has been enabled
+                if(ArtifactEnabled)
+                {
+                    try
+                    {
+                        if(DisabledInteractableSpawnCards.ContainsKey(self.spawnCard.name))
+                        {
+                            // If the interactable has been disabled tell the director it isn't available
+                            return false;
+                        }
+                        else if(ENABLED_INTERACTABLE_SPAWN_CARDS.ContainsValue(self.spawnCard.name))
+                        {
+                            // If the interactable should be used, return true
+                            return true;
+                        }
+                    }
+                    catch(Exception e)
+                    {
+                        Log.Warning("Unable to intervene in card availability process.");
+                        Log.Warning(e);
+                    }
+                }
+                // Return default calculated result
+                return orig(self);
             }
         }
         /******************************************************************/
