@@ -60,11 +60,12 @@ namespace GameModeWave
     public class GameModeWave : BaseUnityPlugin
     {
         // Plugin GUID and other metadata
+        #region metadata
         public const string PluginGUID = PluginAuthor + "." + PluginName;
         public const string PluginAuthor = "MarcieHenderson";
         public const string PluginName = "GameModeWave";
-        public const string PluginVersion = "0.0.5"; // change with each commit
-
+        public const string PluginVersion = "0.0.6"; // change with each commit
+        #endregion metadata
         // Specify GameModeArtifact class attributes and methods
         class GameModeArtifact : ArtifactBase
         {
@@ -76,8 +77,11 @@ namespace GameModeWave
             public override Sprite ArtifactEnabledIcon => Addressables.LoadAssetAsync<Sprite>("RoR2/Base/Common/MiscIcons/texMysteryIcon.png").WaitForCompletion();
             public override Sprite ArtifactDisabledIcon => Addressables.LoadAssetAsync<Sprite>("RoR2/Base/Common/MiscIcons/texMysteryIcon.png").WaitForCompletion();
             // Variables
+            #region variables
             private static Dictionary<string, RoR2.SpawnCard> DisabledInteractableSpawnCards = new Dictionary<string, RoR2.SpawnCard>();
+            #endregion variables
             // Constants
+            #region constants
             private const float BOSS_SPAWN_PERIOD = 60F;
             private const float SPAWN_INCREASE_PERIOD = 300F;
             private const float SUPER_BOSS_START = 20F;
@@ -115,6 +119,7 @@ namespace GameModeWave
                 {"scrapper", Addressables.LoadAssetAsync<RoR2.SpawnCard>("RoR2/Base/Scrapper/iscScrapper.asset").WaitForCompletion().name},
                 {"turret", Addressables.LoadAssetAsync<RoR2.SpawnCard>("RoR2/Base/Drones/iscBrokenTurret1.asset").WaitForCompletion().name},
             };
+            #endregion constants
             public override void Init(ConfigFile config)
             {
                 GameModeArtifact.config = config;
@@ -129,17 +134,22 @@ namespace GameModeWave
             }
             public override void Hooks()
             {
-                // Set hooks
-                Run.onRunStartGlobal += PrintMessageToChat; // message indicating artifact is enabled
-                IL.RoR2.Run.Start += StartController; // change run start behaviour
-                On.RoR2.Run.Update += RunController; // change overall run behaviour
-                On.RoR2.GlobalEventManager.OnCharacterDeath += DeathController; // do stuff on death events
+                // Set all artifact hooks
+                #region artifacthooks
+                Run.onRunStartGlobal += ChatController; // Sends message indicating artifact is enabled
+                IL.RoR2.Run.Start += StartController; // Change run start behaviour
+                On.RoR2.Run.Update += RunController; // Change overall run behaviour
+                On.RoR2.GlobalEventManager.OnCharacterDeath += DeathController; // Do stuff on death events
                 RoR2.SceneDirector.onGenerateInteractableCardSelection += InteractableController0;
-                On.RoR2.SceneDirector.GenerateInteractableCardSelection += InteractableController1; // get information from the interactable card selection
-                On.RoR2.DirectorCard.IsAvailable += CardController; // change the behavior of card selection for interactables
+                On.RoR2.SceneDirector.GenerateInteractableCardSelection += InteractableController1; // Get information from the interactable card selection
+                On.RoR2.DirectorCard.IsAvailable += CardController; // Change the behavior of card selection for interactables
+                On.EntityStates.Duplicator.Duplicating.OnEnter += DuplicatorController; // Modify 3d printer behaviour
+                #endregion artifacthooks
             }
-            // Effects of artifact (currently just prints message to chat)
-            private void PrintMessageToChat(Run run)
+            // Artifact behaviour controllers
+            #region artifactcontrollers
+            // Sends message to chat on run start
+            private void ChatController(Run run)
             {
                 if(NetworkServer.active && ArtifactEnabled)
                 {
@@ -149,9 +159,7 @@ namespace GameModeWave
                     }
                 }
             }
-            // Effect of artifact, allows selection of first stage
-            // based on code written by KingEnderBrine for the
-            // ProperSave mod.
+            // Selection of the stage is based on code written by KingEnderBrine for the ProperSave mod.
             private void StartController(ILContext il) {
                 var c = new ILCursor(il);
                 c.EmitDelegate<Func<bool>>(() =>
@@ -248,11 +256,10 @@ namespace GameModeWave
                                 Transform spawnTransform = RoR2.SpawnPoint.readOnlyInstancesList[UnityEngine.Random.RandomRangeInt(0, RoR2.SpawnPoint.readOnlyInstancesList.Count())].transform;
                                 RoR2.DirectorPlacementRule placementRule = new()
                                 {
-                                    placementMode = RoR2.DirectorPlacementRule.PlacementMode.Approximate,
+                                    placementMode = RoR2.DirectorPlacementRule.PlacementMode.Random,
                                     spawnOnTarget = spawnTransform,
-                                    position = spawnTransform.position,
                                     minDistance = 25,
-                                    maxDistance = 40,
+                                    maxDistance = 200,
                                     preventOverhead = false,
                                 };
                                 Log.Debug("Loaded spawn card and created placement rule.");
@@ -285,7 +292,7 @@ namespace GameModeWave
                     }
                     // run rest of code from other sources
                     orig(self);
-                } 
+                }
             }
             // method for adding function on character deaths
             private void DeathController(On.RoR2.GlobalEventManager.orig_OnCharacterDeath orig, RoR2.GlobalEventManager self, RoR2.DamageReport report)
@@ -331,7 +338,18 @@ namespace GameModeWave
                                     }
                                 }
                                 // drop item
-                                var itemTransform = report.victimBody.master.GetBodyObject().transform;
+                                Transform itemTransform = new();
+                                try
+                                {
+                                    itemTransform = report.victimBody.master.GetBodyObject().transform;
+                                }
+                                catch(Exception e)
+                                {
+                                    // drop scrap near player if the victim has an issue with their body
+                                    itemTransform = RoR2.PlayerCharacterMasterController.instances[0].master.GetBodyObject().transform;
+                                    Log.Debug("Using default transform for dropping scrap");
+                                    Log.Warning(e);
+                                }
                                 RoR2.ItemIndex itemIndex = new();
                                 switch (tierIndex)
                                 {
@@ -376,7 +394,7 @@ namespace GameModeWave
                             try
                             {
                                 var spawnCard = card.spawnCard;
-                                // check the spawn card name against the dictionary of enabled names
+                                // Check the spawn card name against the dictionary of enabled names
                                 if(!ENABLED_INTERACTABLE_SPAWN_CARDS.ContainsValue(spawnCard.name))
                                 {
                                     // If an interactable should not be spawned, add it to
@@ -391,6 +409,10 @@ namespace GameModeWave
                                     {
                                         Log.Debug(spawnCard.name + " already exists in the disabled interactables list.");
                                     }
+                                }
+                                else
+                                {
+                                    // Modify the behaviour of the enabled interactable spawn cards
                                 }
                             }
                             catch(Exception e)
@@ -435,9 +457,88 @@ namespace GameModeWave
                 // Return default calculated result
                 return orig(self);
             }
+            // Method for changing the behaviour of interactable 3d printers (add to region above on completion)
+            private void DuplicatorController(On.EntityStates.Duplicator.Duplicating.orig_OnEnter orig, EntityStates.Duplicator.Duplicating self)
+            {
+                // Run regular interaction behaviour
+                orig(self);
+                // Add behaviour if the artifact is enabled
+                if(ArtifactEnabled)
+                {
+                    // If the network server is active
+                    if(UnityEngine.Networking.NetworkServer.active)
+                    {
+                        #pragma warning disable Publicizer001
+                        var interaction = self.GetComponent<RoR2.PurchaseInteraction>();
+                        var behaviour = self.GetComponent<RoR2.ShopTerminalBehavior>();
+                        #pragma warning restore Publicizer001
+                        if(interaction && behaviour)
+                        {
+                            var body = interaction.lastActivator.GetComponent<RoR2.CharacterBody>();
+                            if(body && body.inventory)
+                            {
+                                #pragma warning disable Publicizer001
+                                var pickup = RoR2.PickupCatalog.GetPickupDef(behaviour.pickupIndex);
+                                if(pickup != null && pickup.itemIndex != RoR2.ItemIndex.None)
+                                {
+                                    body.inventory.GiveItem(pickup.itemIndex, 1);
+                                    behaviour.SetHasBeenPurchased(true);
+                                    self.hasDroppedDroplet = true;
+                                    self.hasStartedCooking = true;
+                                    try
+                                    {
+                                        // If the context token can be parsed then change the number of remaining uses
+                                        if(int.TryParse(interaction.displayNameToken, out int remaining))
+                                        {
+                                            int remainingNew = remaining - 1;
+                                            if(remainingNew > 0)
+                                            {
+                                                interaction.contextToken = "Remaining Uses: " + remainingNew.ToString();
+                                                interaction.displayNameToken = remainingNew.ToString();
+                                                Log.Debug("Updated 3D printer uses.");
+                                            }
+                                            else
+                                            {
+                                                interaction.contextToken = "Remaining Uses: 5";
+                                                interaction.displayNameToken = "5";
+                                                Log.Debug("Reset 3D printer uses.");
+                                                try
+                                                {
+                                                    // change item that can be duplicated
+                                                    behaviour.SetPickupIndex(behaviour.dropTable.GenerateDrop(behaviour.rng), false);
+                                                    behaviour.UpdatePickupDisplayAndAnimations();
+                                                    Log.Debug("A 3D printer has changed.");
+                                                }
+                                                catch(Exception e)
+                                                {
+                                                    Log.Warning("Unable to change printer item");
+                                                    Log.Warning(e);
+                                                }
+                                            }   
+                                        }
+                                        else
+                                        {
+                                            interaction.contextToken = "Remaining Uses: 4";
+                                            interaction.displayNameToken = "4";
+                                            Log.Debug("Initialized 3d printer.");
+                                        }
+                                    }
+                                    catch(Exception e)
+                                    {
+                                        Log.Warning("Error updating printer interaction.");
+                                        Log.Warning(e);
+                                    }
+                                }
+                                #pragma warning restore Publicizer001
+                            }
+                        }
+                    }
+                }
+            }
+            #endregion artifactcontrollers
         }
-        /******************************************************************/
         // Define persistent objects here
+        #region persistant
         // Initialize list of artifacts
         public List<ArtifactBase> Artifacts = new List<ArtifactBase>();
         // Initialize lobby ui controller
@@ -451,7 +552,7 @@ namespace GameModeWave
         // Initialize field info used in replacing the code at run start
         private static readonly FieldInfo onRunStartGlobalDelegate = typeof(Run).GetField(nameof(Run.onRunStartGlobal), BindingFlags.NonPublic | BindingFlags.Static);
         private static float previousTime = 0;
-        /******************************************************************/
+        #endregion persistant
         // Runs at game initialization - use for initializing mod
         public void Awake()
         {
@@ -494,6 +595,7 @@ namespace GameModeWave
             On.RoR2.UI.CharacterSelectController.Awake -= CreateLobbyUI;
         }
         // Custom methods
+        #region methods
         // Validate artifact method
         public bool ValidateArtifact(ArtifactBase artifact, List<ArtifactBase> artifactList)
         {
@@ -635,5 +737,6 @@ namespace GameModeWave
             lobbyButtonText.ForceMeshUpdate();
             Log.Debug(lobbyButtonString + " code: " + startingSceneCode + " index: " + startingSceneIndex);
         }
+        #endregion methods
     }
 }
