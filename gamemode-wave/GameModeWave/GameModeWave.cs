@@ -42,6 +42,7 @@ using System.Collections;
 description: RoR2 Plugin for Adding a Wave-Based Game-Mode
 author: Marcie Henderson
 since: 20240405
+todo: Improve GUI, Add equipment loadout for selection
 ***/
 namespace GameModeWave
 {
@@ -64,7 +65,7 @@ namespace GameModeWave
         public const string PluginGUID = PluginAuthor + "." + PluginName;
         public const string PluginAuthor = "MarcieHenderson";
         public const string PluginName = "GameModeWave";
-        public const string PluginVersion = "0.0.6"; // change with each commit
+        public const string PluginVersion = "0.0.7"; // change with each commit
         #endregion metadata
         // Specify GameModeArtifact class attributes and methods
         class GameModeArtifact : ArtifactBase
@@ -116,8 +117,8 @@ namespace GameModeWave
                 {"copy_rare", Addressables.LoadAssetAsync<RoR2.SpawnCard>("RoR2/Base/DuplicatorLarge/iscDuplicatorLarge.asset").WaitForCompletion().name},
                 {"copy_legend", Addressables.LoadAssetAsync<RoR2.SpawnCard>("RoR2/Base/DuplicatorMilitary/iscDuplicatorMilitary.asset").WaitForCompletion().name},
                 {"copy_boss", Addressables.LoadAssetAsync<RoR2.SpawnCard>("RoR2/Base/DuplicatorWild/iscDuplicatorWild.asset").WaitForCompletion().name},
-                {"scrapper", Addressables.LoadAssetAsync<RoR2.SpawnCard>("RoR2/Base/Scrapper/iscScrapper.asset").WaitForCompletion().name},
-                {"turret", Addressables.LoadAssetAsync<RoR2.SpawnCard>("RoR2/Base/Drones/iscBrokenTurret1.asset").WaitForCompletion().name},
+                //{"scrapper", Addressables.LoadAssetAsync<RoR2.SpawnCard>("RoR2/Base/Scrapper/iscScrapper.asset").WaitForCompletion().name},
+                //{"turret", Addressables.LoadAssetAsync<RoR2.SpawnCard>("RoR2/Base/Drones/iscBrokenTurret1.asset").WaitForCompletion().name},
             };
             #endregion constants
             public override void Init(ConfigFile config)
@@ -137,13 +138,19 @@ namespace GameModeWave
                 // Set all artifact hooks
                 #region artifacthooks
                 Run.onRunStartGlobal += ChatController; // Sends message indicating artifact is enabled
-                IL.RoR2.Run.Start += StartController; // Change run start behaviour
+                On.RoR2.Run.Start += StartILCondition; // Determin whether to override start behaviour
                 On.RoR2.Run.Update += RunController; // Change overall run behaviour
                 On.RoR2.GlobalEventManager.OnCharacterDeath += DeathController; // Do stuff on death events
                 RoR2.SceneDirector.onGenerateInteractableCardSelection += InteractableController0;
                 On.RoR2.SceneDirector.GenerateInteractableCardSelection += InteractableController1; // Get information from the interactable card selection
                 On.RoR2.DirectorCard.IsAvailable += CardController; // Change the behavior of card selection for interactables
                 On.EntityStates.Duplicator.Duplicating.OnEnter += DuplicatorController; // Modify 3d printer behaviour
+                On.RoR2.SceneDirector.PlaceTeleporter += TeleporterController; // Delete any spawned teleporters
+                // Remove artifact hooks
+                 On.RoR2.Run.OnDestroy += (orig, self) =>
+                {
+                    IL.RoR2.Run.Start -= StartController; // Allow normal run start for non-artifact runs
+                };
                 #endregion artifacthooks
             }
             // Artifact behaviour controllers
@@ -159,77 +166,83 @@ namespace GameModeWave
                     }
                 }
             }
+            // Ensures run start behaviour is not overridden on a normal run
+            private void StartILCondition(On.RoR2.Run.orig_Start orig, RoR2.Run self)
+            {
+                if(ArtifactEnabled)
+                {
+                    IL.RoR2.Run.Start += StartController; // Change run start behaviour
+                }
+                orig(self);
+            }
             // Selection of the stage is based on code written by KingEnderBrine for the ProperSave mod.
             private void StartController(ILContext il) {
                 var c = new ILCursor(il);
                 c.EmitDelegate<Func<bool>>(() =>
                 {
-                    // Check if the artifact has been enabled
-                    if (ArtifactEnabled)
+                    previousTime = 0; // Reset timer for regular boss spawning
+                    // Sets next stage to the currently selected stage
+                    try
                     {
-                        // Sets next stage to the currently selected stage
-                        try
+                        var instance = Run.instance;
+                        #pragma warning disable Publicizer001
+                        instance.OnRuleBookUpdated(instance.networkRuleBookComponent);
+                        #pragma warning restore Publicizer001
+                        instance.seed = instance.GenerateSeedForNewRun();
+                        instance.selectedDifficulty = DifficultyIndex.Hard;
+                        instance.fixedTime = 0;
+                        instance.shopPortalCount = 0;
+                        #pragma warning disable Publicizer001
+                        instance.runStopwatch = new Run.RunStopwatch
                         {
-                            var instance = Run.instance;
-                            #pragma warning disable Publicizer001
-                            instance.OnRuleBookUpdated(instance.networkRuleBookComponent);
-                            #pragma warning restore Publicizer001
-                            instance.seed = instance.GenerateSeedForNewRun();
-                            instance.selectedDifficulty = DifficultyIndex.Hard;
-                            instance.fixedTime = 0;
-                            instance.shopPortalCount = 0;
-                            #pragma warning disable Publicizer001
-                            instance.runStopwatch = new Run.RunStopwatch
+                            offsetFromFixedTime = 0,
+                            isPaused = false
+                        };
+                        var rng = FormatterServices.GetUninitializedObject(typeof(Xoroshiro128Plus)) as Xoroshiro128Plus;
+                        rng.ResetSeed(instance.seed); // set rng seed to instance seed
+                        instance.runRNG = rng;
+                        instance.nextStageRng = rng;
+                        instance.stageRngGenerator = rng;
+                        instance.GenerateStageRNG();
+                        instance.allowNewParticipants = true;
+                        #pragma warning restore Publicizer001
+                        UnityEngine.Object.DontDestroyOnLoad(instance.gameObject);
+                        var onlyInstancesList = NetworkUser.readOnlyInstancesList;
+                        for (int index = 0; index < onlyInstancesList.Count; ++index)
+                        {
+                            instance.OnUserAdded(onlyInstancesList[index]);
+                        }
+                        #pragma warning disable Publicizer001
+                        instance.allowNewParticipants = false;
+                        #pragma warning restore Publicizer001
+                        instance.stageClearCount = 0;
+                        instance.RecalculateDifficultyCoefficent();
+                        instance.nextStageScene = SceneCatalog.GetSceneDefFromSceneName(startingSceneCode);
+                        NetworkManager.singleton.ServerChangeScene(startingSceneCode);
+                        Log.Debug("Requested " + startingSceneCode + " scene.");
+                        #pragma warning disable Publicizer001
+                        instance.BuildUnlockAvailability();
+                        #pragma warning restore Publicizer001
+                        instance.BuildDropTable();
+                        if (onRunStartGlobalDelegate.GetValue(null) is MulticastDelegate onRunStartGlobal && onRunStartGlobal != null)
+                        {
+                            foreach (var handler in onRunStartGlobal.GetInvocationList())
                             {
-                                offsetFromFixedTime = 0,
-                                isPaused = false
-                            };
-                            var rng = FormatterServices.GetUninitializedObject(typeof(Xoroshiro128Plus)) as Xoroshiro128Plus;
-                            rng.ResetSeed(instance.seed); // set rng seed to instance seed
-                            instance.runRNG = rng;
-                            instance.nextStageRng = rng;
-                            instance.stageRngGenerator = rng;
-                            instance.GenerateStageRNG();
-                            instance.allowNewParticipants = true;
-                            #pragma warning restore Publicizer001
-                            UnityEngine.Object.DontDestroyOnLoad(instance.gameObject);
-                            var onlyInstancesList = NetworkUser.readOnlyInstancesList;
-                            for (int index = 0; index < onlyInstancesList.Count; ++index)
-                            {
-                                instance.OnUserAdded(onlyInstancesList[index]);
-                            }
-                            #pragma warning disable Publicizer001
-                            instance.allowNewParticipants = false;
-                            #pragma warning restore Publicizer001
-                            instance.stageClearCount = 0;
-                            instance.RecalculateDifficultyCoefficent();
-                            instance.nextStageScene = SceneCatalog.GetSceneDefFromSceneName(startingSceneCode);
-                            NetworkManager.singleton.ServerChangeScene(startingSceneCode);
-                            Log.Debug("Requested " + startingSceneCode + " scene.");
-                            #pragma warning disable Publicizer001
-                            instance.BuildUnlockAvailability();
-                            #pragma warning restore Publicizer001
-                            instance.BuildDropTable();
-                            if (onRunStartGlobalDelegate.GetValue(null) is MulticastDelegate onRunStartGlobal && onRunStartGlobal != null)
-                            {
-                                foreach (var handler in onRunStartGlobal.GetInvocationList())
-                                {
-                                    handler.Method.Invoke(handler.Target, new object[] { instance });
-                                }
+                                handler.Method.Invoke(handler.Target, new object[] { instance });
                             }
                         }
-                        catch(Exception e)
-                        {
-                            Log.Warning("Unable to set starting stage to " + startingSceneCode + " scene.");
-                            Log.Warning(e);
-                        }
+                    }
+                    catch(Exception e)
+                    {
+                        Log.Warning("Unable to set starting stage to " + startingSceneCode + " scene.");
+                        Log.Warning(e);
                     }
                     return ArtifactEnabled;
                 });
                 c.Emit(Mono.Cecil.Cil.OpCodes.Brfalse, c.Next);
                 c.Emit(Mono.Cecil.Cil.OpCodes.Ret);
             }
-            // method for changing behaviour of a run
+            // Method for changing behaviour of a run
             private void RunController(On.RoR2.Run.orig_Update orig, RoR2.Run self)
             {
                 if(ArtifactEnabled)
@@ -252,21 +265,23 @@ namespace GameModeWave
                             try
                             {
                                 RoR2.CharacterSpawnCard bossSpawnCard = Addressables.LoadAssetAsync<RoR2.CharacterSpawnCard>(cardReference).WaitForCompletion();
-                                // select random spawn point from available instances
-                                Transform spawnTransform = RoR2.SpawnPoint.readOnlyInstancesList[UnityEngine.Random.RandomRangeInt(0, RoR2.SpawnPoint.readOnlyInstancesList.Count())].transform;
+                                // Get player's current transform value
+                                Transform playerTransform = PlayerCharacterMasterController.instances[0].master.GetBodyObject().transform;
+                                // Get valid ground nodes for spawning a boss within a specified range from the player
+                                List<RoR2.Navigation.NodeGraph.NodeIndex> validSpawnNodes = RoR2.SceneInfo.instance.groundNodes.FindNodesInRange(playerTransform.position, 30F, 200F, RoR2.HullMask.BeetleQueen);
+                                // Randomly select one of the valid nodes
+                                RoR2.SceneInfo.instance.groundNodes.GetNodePosition(validSpawnNodes[UnityEngine.Random.RandomRangeInt(0, validSpawnNodes.Count)], out Vector3 spawnPosition);
+                                // Create the placement rule for spawning the boss
                                 RoR2.DirectorPlacementRule placementRule = new()
                                 {
-                                    placementMode = RoR2.DirectorPlacementRule.PlacementMode.Random,
-                                    spawnOnTarget = spawnTransform,
-                                    minDistance = 25,
-                                    maxDistance = 200,
-                                    preventOverhead = false,
+                                    placementMode = RoR2.DirectorPlacementRule.PlacementMode.Approximate,
+                                    position = spawnPosition,
                                 };
                                 Log.Debug("Loaded spawn card and created placement rule.");
                                 try
                                 {
                                     RoR2.DirectorSpawnRequest spawnRequest = new(bossSpawnCard, placementRule, self.runRNG);
-                                    Quaternion quaternion = spawnTransform.localRotation;
+                                    Quaternion quaternion = playerTransform.rotation;
                                     spawnRequest.ignoreTeamMemberLimit = true;
                                     spawnRequest.teamIndexOverride = TeamIndex.Monster;
                                     RoR2.SpawnCard.SpawnResult spawnResult = bossSpawnCard.DoSpawn(placementRule.targetPosition, quaternion, spawnRequest);
@@ -294,7 +309,7 @@ namespace GameModeWave
                     orig(self);
                 }
             }
-            // method for adding function on character deaths
+            // Method for adding function on character deaths
             private void DeathController(On.RoR2.GlobalEventManager.orig_OnCharacterDeath orig, RoR2.GlobalEventManager self, RoR2.DamageReport report)
             {
                 if(ArtifactEnabled)
@@ -381,7 +396,7 @@ namespace GameModeWave
                     }
                 }
             }
-            // Methods for gathering disabled interactables (based on the ContentDisabler mod by William758)
+            // Methods for gathering disabled interactables based on the ContentDisabler mod by William758
             private void InteractableController0 (RoR2.SceneDirector sceneDirector, RoR2.DirectorCardCategorySelection dccs)
             {
                 Log.Debug("InteractableController0 - Start");
@@ -457,7 +472,7 @@ namespace GameModeWave
                 // Return default calculated result
                 return orig(self);
             }
-            // Method for changing the behaviour of interactable 3d printers (add to region above on completion)
+            // Method for changing the behaviour of interactable 3d printers based on the PrintToInventory mod by Moffein
             private void DuplicatorController(On.EntityStates.Duplicator.Duplicating.orig_OnEnter orig, EntityStates.Duplicator.Duplicating self)
             {
                 // Run regular interaction behaviour
@@ -504,6 +519,33 @@ namespace GameModeWave
                                                 Log.Debug("Reset 3D printer uses.");
                                                 try
                                                 {
+                                                    switch(UnityEngine.Random.RandomRangeInt(0, 4))
+                                                    {
+                                                        default:
+                                                            behaviour.dropTable = Addressables.LoadAssetAsync<RoR2.BasicPickupDropTable>("RoR2/Base/Duplicator/dtDuplicatorTier1.asset").WaitForCompletion();
+                                                            interaction.costType = RoR2.CostTypeIndex.WhiteItem;
+                                                            break;
+                                                        case 1:
+                                                            behaviour.dropTable = Addressables.LoadAssetAsync<RoR2.BasicPickupDropTable>("RoR2/Base/DuplicatorLarge/dtDuplicatorTier2.asset").WaitForCompletion();
+                                                            interaction.costType = RoR2.CostTypeIndex.GreenItem;
+                                                            break;
+                                                        case 2:
+                                                            behaviour.dropTable = Addressables.LoadAssetAsync<RoR2.BasicPickupDropTable>("RoR2/Base/DuplicatorMilitary/dtDuplicatorTier3.asset").WaitForCompletion();
+                                                            interaction.costType = RoR2.CostTypeIndex.RedItem;
+                                                            break;
+                                                        case 3:
+                                                            behaviour.dropTable = Addressables.LoadAssetAsync<RoR2.BasicPickupDropTable>("RoR2/Base/DuplicatorWild/dtDuplicatorWild.asset").WaitForCompletion();
+                                                            interaction.costType = RoR2.CostTypeIndex.BossItem;
+                                                            break;
+                                                    }
+                                                }
+                                                catch(Exception e)
+                                                {
+                                                    Log.Warning("Error while randomizing the printer's tier");
+                                                    Log.Warning(e);
+                                                }
+                                                try
+                                                {
                                                     // change item that can be duplicated
                                                     behaviour.SetPickupIndex(behaviour.dropTable.GenerateDrop(behaviour.rng), false);
                                                     behaviour.UpdatePickupDisplayAndAnimations();
@@ -535,6 +577,28 @@ namespace GameModeWave
                     }
                 }
             }
+            // Method for conditionally removing the teleporter from the scene
+            private void TeleporterController(On.RoR2.SceneDirector.orig_PlaceTeleporter orig, RoR2.SceneDirector self)
+            {
+                // Allow teleporter to be spawned as usual
+                orig(self);
+                // If artifact is enabled, then delete the teleporter from the scene
+                if(ArtifactEnabled)
+                {
+                    // Try to destroy the teleporter gameobject
+                    try
+                    {
+                        UnityEngine.GameObject.Destroy(self.teleporterInstance);
+                        Log.Debug("Teleporter Removed");
+                    }
+                    catch(Exception e)
+                    {
+                        Log.Warning("Unable to remove teleporter GameObject.");
+                        Log.Warning(e);
+                    }
+                    
+                }
+            }
             #endregion artifactcontrollers
         }
         // Define persistent objects here
@@ -558,7 +622,6 @@ namespace GameModeWave
         {
             // Start logger
             Log.Init(Logger);
-
             // Modded artifact startup code
             var ArtifactTypes = Assembly.GetExecutingAssembly().GetTypes().Where(type => !type.IsAbstract && type.IsSubclassOf(typeof(ArtifactBase)));
             foreach (var artifactType in ArtifactTypes)
@@ -569,7 +632,6 @@ namespace GameModeWave
                     artifact.Init(Config);
                 }
             }
-
             // Add Hooks
             // adds new lobby ui button
             On.RoR2.UI.CharacterSelectController.Awake += CreateLobbyUI;
@@ -580,19 +642,11 @@ namespace GameModeWave
                 orig(self);
             };
         }
-
         // Runs on each frame - use for continuous processes in mod
         private void Update()
         {
             // add stuff here
             
-        }
-
-        // Clean up note - not sure if this works yet
-        private void OnDestroy()
-        {
-            // Remove Hooks
-            On.RoR2.UI.CharacterSelectController.Awake -= CreateLobbyUI;
         }
         // Custom methods
         #region methods
@@ -611,7 +665,7 @@ namespace GameModeWave
         {
             // reset stage select option
             startingSceneIndex = 0;
-            startingSceneCode = "";
+            startingSceneCode = "ancientloft";
             lobbyUI = self;
             // Try to load ui components, and catch/log on error
             try
@@ -628,14 +682,14 @@ namespace GameModeWave
                 UnityEngine.UI.Image lobbyButtonImage = lobbyButton.AddComponent<UnityEngine.UI.Image>();
                 lobbyButtonImage.sprite = Addressables.LoadAssetAsync<Sprite>("RoR2/Base/UI/texUILaunchButton.png").WaitForCompletion();
                 // Position the button
-                lobbyButtonImage.rectTransform.anchorMin = new Vector2((float)0.510, (float)0.411);
-                lobbyButtonImage.rectTransform.anchorMax = new Vector2((float)0.515, (float)0.413);
+                lobbyButtonImage.rectTransform.anchorMin = new Vector2((float)0.511, (float)0.411);
+                lobbyButtonImage.rectTransform.anchorMax = new Vector2((float)0.513, (float)0.413);
                 // Add text to button
                 lobbyButtonChild = new GameObject("StageSelectText");
                 lobbyButtonChild.transform.SetParent(lobbyButtonImage.transform);
                 TextMeshProUGUI lobbyButtonChildText = lobbyButtonChild.AddComponent<TextMeshProUGUI>();
                 lobbyButtonChildText.name = "LobbyButtonText";
-                lobbyButtonChildText.text = "Default";
+                lobbyButtonChildText.text = "Aphelian Sanctuary";
                 lobbyButtonChildText.color = UnityEngine.Color.white;
                 lobbyButtonChildText.fontSize = 3;
                 lobbyButtonChildText.autoSizeTextContainer = true;
@@ -664,71 +718,60 @@ namespace GameModeWave
             Log.Debug("Lobby button clicked.");
             // Open stage selector ui
             String lobbyButtonString = "";
+            startingSceneIndex++;
             switch (startingSceneIndex)
             {
-                case 0:
+                default:
                     lobbyButtonString = "Aphelian Sanctuary";
-                    startingSceneIndex++;
                     startingSceneCode = "ancientloft";
                     break;
                 case 1:
                     lobbyButtonString = "Titanic Plains";
-                    startingSceneIndex++;
                     startingSceneCode = "golemplains";
                     break;
                 case 2:
                     lobbyButtonString = "Distant Roost";
-                    startingSceneIndex++;
                     startingSceneCode = "blackbeach";
                     break;
                 case 3:
                     lobbyButtonString = "Wetland Aspect";
-                    startingSceneIndex++;
                     startingSceneCode = "foggyswamp";
                     break;
                 case 4:
                     lobbyButtonString = "Rallypoint Delta";
-                    startingSceneIndex++;
                     startingSceneCode = "frozenwall";
                     break;
                 case 5:
                     lobbyButtonString = "Abyssal Depths";
-                    startingSceneIndex++;
                     startingSceneCode = "dampcavesimple";
                     break;
                 case 6:
                     lobbyButtonString = "Abandoned Aqueduct";
-                    startingSceneIndex++;
                     startingSceneCode = "goolake";
                     break;
                 case 7:
                     lobbyButtonString = "Sundered Grove";
-                    startingSceneIndex++;
                     startingSceneCode = "rootjungle";
                     break;
                 case 8:
                     lobbyButtonString = "Siren's Call";
-                    startingSceneIndex++;
                     startingSceneCode = "shipgraveyard";
                     break;
                 case 9:
                     lobbyButtonString = "Siphoned Forest";
-                    startingSceneIndex++;
                     startingSceneCode = "snowyforest";
                     break;
                 case 10:
                     lobbyButtonString = "Sulfur Pools";
-                    startingSceneIndex++;
                     startingSceneCode = "sulfurpools";
                     break;
                 case 11:
                     lobbyButtonString = "Scorched Acres";
-                    startingSceneIndex++;
                     startingSceneCode = "wispgraveyard";
                     break;
                 case 12:
                     lobbyButtonString = "Sky Meadow";
-                    startingSceneIndex = 0;
+                    startingSceneIndex = -1;
                     startingSceneCode = "skymeadow";
                     break;
             }
