@@ -1,0 +1,7 @@
+ManifestFileVersion: 0
+CRC: 2256152973
+AssetBundleManifest:
+  AssetBundleInfos:
+    Info_0:
+      Name: botanistbundle
+      Dependencies: {}

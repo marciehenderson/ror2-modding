@@ -1,0 +1,35 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "dotnet",
+			"task": "build",
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"problemMatcher": [],
+			"label": "dotnet: build",
+		},
+		{
+			"type": "shell",
+			"group": {
+				"kind": "none"
+			},
+			"problemMatcher": [],
+			"label": "ror2-mod: deploy",
+			"command": "cp",
+			"args": [
+				"-a",
+				{
+					"value":"/opt/common/dev/ror2_mods/character-botanist/bin/Debug/netstandard2.0/.",
+					"quoting": "strong"
+				},
+				{
+					"value": "/home/marcie-personal/modding/testing-plugins/MarcieHenderson-BotanistMod",
+					"quoting": "strong",
+				},
+			]
+		}
+	]
+}
