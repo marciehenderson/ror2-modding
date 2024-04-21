@@ -8,12 +8,12 @@ using UnityEngine.AddressableAssets;
 
 namespace BotanistMod.Survivors.Botanist.SkillStates
 {
-    public class SlashCombo : BaseSkillState
+    public class SwingShovel : BaseSkillState
     {
         public static float damageCoefficient = BotanistStaticValues.swordDamageCoefficient;
         public static float procCoefficient = 1F;
         public static float baseDuration = 1.2F;
-        public static float force = 5000F;
+        public static float force = 10000F;
         public static float recoil = 100F;
         public static float radius = 10F;
         public int swingCount = 1;
@@ -63,7 +63,18 @@ namespace BotanistMod.Survivors.Botanist.SkillStates
             swing.radius = radius;
             swing.teamIndex = base.GetTeam();
             // swing the shovel
-            if(base.isAuthority) swing.Fire();
+            if(base.isAuthority)
+            {
+                // temporary effect until animation is created
+                RoR2.EffectManager.SimpleEffect(
+                    Addressables.LoadAssetAsync<GameObject>("RoR2/Base/Cleanse/CleanseEffect.prefab").WaitForCompletion(),
+                    transform.position,
+                    RoR2.Util.QuaternionSafeLookRotation(Vector3.forward),
+                    true
+                );
+                swing.Fire();
+                Log.Debug("Botanist swung their shovel");
+            }
         }
         public override InterruptPriority GetMinimumInterruptPriority()
         {

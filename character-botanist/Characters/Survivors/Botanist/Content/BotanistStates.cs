@@ -6,11 +6,11 @@ namespace BotanistMod.Survivors.Botanist
     {
         public static void Init()
         {
-            Modules.Content.AddEntityState(typeof(SlashCombo));
+            Modules.Content.AddEntityState(typeof(SwingShovel));
 
             Modules.Content.AddEntityState(typeof(ThrowPot));
 
-            Modules.Content.AddEntityState(typeof(Roll));
+            Modules.Content.AddEntityState(typeof(WaterHop));
 
             Modules.Content.AddEntityState(typeof(ThrowBomb));
         }

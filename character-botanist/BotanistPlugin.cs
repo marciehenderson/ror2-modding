@@ -28,6 +28,12 @@ using R2API.Utils;
 * an aoe attack called 'Swing Shovel' that pushes away all 
 * nearby foes.
 */
+/* [v004]
+* V0.0.4 - Tweaked existing skills. Added the utility skill 
+* called 'Water Hop' which gives Botanist a useful option
+* for mobility. Also removes any existing debuffs like the
+* cleanse effect.
+*/
 namespace BotanistMod
 {
     [NetworkCompatibility(CompatibilityLevel.EveryoneMustHaveMod, VersionStrictness.EveryoneNeedSameModVersion)]
@@ -36,7 +42,7 @@ namespace BotanistMod
     {
         public const string MODUID = "com.MarcieHenderson.BotanistMod";
         public const string MODNAME = "BotanistMod";
-        public const string MODVERSION = "0.0.3";
+        public const string MODVERSION = "0.0.4";
         public const string DEVELOPER_PREFIX = "MARCIEHENDERSON";
 
         public static BotanistPlugin instance;

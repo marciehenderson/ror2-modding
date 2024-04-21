@@ -20,11 +20,11 @@ namespace BotanistMod.Survivors.Botanist
         {
             string prefix = BotanistSurvivor.BOTANIST_PREFIX;
 
-            string desc = "Botanist is a skilled fighter who makes use of a wide arsenal of weaponry to take down his foes.<color=#CCD3E0>" + Environment.NewLine + Environment.NewLine
+            string desc = "Botanist leverages the tools at her disposal to cultivate debuffs and harvest foes.<color=#CCD3E0>" + Environment.NewLine + Environment.NewLine
              + "< ! > Throw Pot is good for crowd-control and inflicting debuffs." + Environment.NewLine + Environment.NewLine
              + "< ! > Swing Shovel is good for keeping foes at bay or pushing them into hazards." + Environment.NewLine + Environment.NewLine
-             + "< ! > Roll has a lingering armor buff that helps to use it aggressively." + Environment.NewLine + Environment.NewLine
-             + "< ! > Bomb can be used to wipe crowds with ease." + Environment.NewLine + Environment.NewLine;
+             + "< ! > Water Hop is useful for evasion and mobility." + Environment.NewLine + Environment.NewLine
+             + "< ! > Water the Garden scales with the target's debuffs, take advantage of this to deal massive damage." + Environment.NewLine + Environment.NewLine;
 
             string outro = "..and so she left, having grown all she could.";
             string outroFailure = "..and so she vanished, no longer able to grow.";
@@ -56,8 +56,8 @@ namespace BotanistMod.Survivors.Botanist
             #endregion
 
             #region Utility
-            Language.Add(prefix + "UTILITY_ROLL_NAME", "Roll");
-            Language.Add(prefix + "UTILITY_ROLL_DESCRIPTION", "Roll a short distance, gaining <style=cIsUtility>300 armor</style>. <style=cIsUtility>You cannot be hit during the roll.</style>");
+            Language.Add(prefix + "UTILITY_HOP_NAME", "Hop");
+            Language.Add(prefix + "UTILITY_HOP_DESCRIPTION", "Hop a short distance.");
             #endregion
 
             #region Special

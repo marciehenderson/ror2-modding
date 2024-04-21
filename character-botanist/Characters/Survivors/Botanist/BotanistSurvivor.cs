@@ -250,7 +250,7 @@ namespace BotanistMod.Survivors.Botanist
                 skillDescriptionToken = BOTANIST_PREFIX + "Secondary_SHOVEL_DESCRIPTION",
                 keywordTokens = new string[] { "KEYWORD_AGILE" },
                 skillIcon = assetBundle.LoadAsset<Sprite>("texPrimaryIcon"),
-                activationState = new EntityStates.SerializableEntityStateType(typeof(SkillStates.SlashCombo)),
+                activationState = new EntityStates.SerializableEntityStateType(typeof(SkillStates.SwingShovel)),
                 activationStateMachineName = "Weapon1",
                 interruptPriority = EntityStates.InterruptPriority.PrioritySkill,
                 baseRechargeInterval = 3F,
@@ -274,38 +274,31 @@ namespace BotanistMod.Survivors.Botanist
         private void AddUtiitySkills()
         {
             Skills.CreateGenericSkillWithSkillFamily(bodyPrefab, SkillSlot.Utility);
-
-            //here's a skilldef of a typical movement skill.
+            // creates the utility skill for botanist called 'Water Hop'
             SkillDef utilitySkillDef1 = Skills.CreateSkillDef(new SkillDefInfo
             {
-                skillName = "BotanistRoll",
-                skillNameToken = BOTANIST_PREFIX + "UTILITY_ROLL_NAME",
-                skillDescriptionToken = BOTANIST_PREFIX + "UTILITY_ROLL_DESCRIPTION",
+                skillName = "BotanistHop",
+                skillNameToken = BOTANIST_PREFIX + "UTILITY_HOP_NAME",
+                skillDescriptionToken = BOTANIST_PREFIX + "UTILITY_HOP_DESCRIPTION",
                 skillIcon = assetBundle.LoadAsset<Sprite>("texUtilityIcon"),
-
-                activationState = new EntityStates.SerializableEntityStateType(typeof(Roll)),
+                activationState = new EntityStates.SerializableEntityStateType(typeof(WaterHop)),
                 activationStateMachineName = "Body",
                 interruptPriority = EntityStates.InterruptPriority.PrioritySkill,
-
                 baseRechargeInterval = 4f,
                 baseMaxStock = 1,
-
                 rechargeStock = 1,
                 requiredStock = 1,
                 stockToConsume = 1,
-
                 resetCooldownTimerOnUse = false,
                 fullRestockOnAssign = true,
                 dontAllowPastMaxStocks = false,
                 mustKeyPress = false,
                 beginSkillCooldownOnSkillEnd = false,
-
                 isCombatSkill = false,
                 canceledFromSprinting = false,
                 cancelSprintingOnActivation = false,
                 forceSprintDuringState = true,
             });
-
             Skills.AddUtilitySkills(bodyPrefab, utilitySkillDef1);
         }
 
