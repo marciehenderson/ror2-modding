@@ -1,31 +1,37 @@
 ﻿using BepInEx;
 using BotanistMod.Survivors.Botanist;
 using R2API.Utils;
-using RoR2;
-using System.Collections.Generic;
-using System.Security;
-using System.Security.Permissions;
 
-[module: UnverifiableCode]
-// Below is deprecated
-//[assembly: SecurityPermission(SecurityAction.RequestMinimum, SkipVerification = true)]
-
-//rename this namespace
+/*
+* @description: A mod for the game 'Risk of Rain 2' which
+* introduces a new playable character known as 'Botanist'.
+* @author: Marcie Henderson
+* @since: 20240415
+* @note: Based on HenryMod tutorial for creating characters.
+* @todo: Create base skills for Botanist (Primary, Secondary,
+* Utility, Special)
+*/
+// @history: 
+/* [v001]
+* V0.0.1 - Asset bundle with custom model and textures loads
+* properly. Fixed miscellaneous runtime errors, thus allowing
+* the bare-bones character to be playable.
+*/
+/* [v002]
+* V0.0.2 - Secondary skill is modified to be a throwable pot
+* that applies a debuff on hit. Skill naming still needs to
+* be changes. Tweaks will improve behaviour once other skills
+* are complete.
+*/
 namespace BotanistMod
 {
-    //[BepInDependency("com.rune580.riskofoptions", BepInDependency.DependencyFlags.SoftDependency)]
     [NetworkCompatibility(CompatibilityLevel.EveryoneMustHaveMod, VersionStrictness.EveryoneNeedSameModVersion)]
     [BepInPlugin(MODUID, MODNAME, MODVERSION)]
     public class BotanistPlugin : BaseUnityPlugin
     {
-        // if you do not change this, you are giving permission to deprecate the mod-
-        //  please change the names to your own stuff, thanks
-        //   this shouldn't even have to be said
         public const string MODUID = "com.MarcieHenderson.BotanistMod";
         public const string MODNAME = "BotanistMod";
-        public const string MODVERSION = "0.0.1";
-
-        // a prefix for name tokens to prevent conflicts- please capitalize all name tokens for convention
+        public const string MODVERSION = "0.0.2";
         public const string DEVELOPER_PREFIX = "MARCIEHENDERSON";
 
         public static BotanistPlugin instance;

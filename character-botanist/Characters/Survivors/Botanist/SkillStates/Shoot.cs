@@ -6,129 +6,73 @@ using On.RoR2;
 using UnityEngine.AddressableAssets;
 using EntityStates.Missions.Arena.NullWard;
 using System.IO;
+using System;
+using R2API.Utils;
+using IL.RoR2.Orbs;
+using RoR2.Projectile;
+using EntityStates.Engi.EngiMissilePainter;
 
 namespace BotanistMod.Survivors.Botanist.SkillStates
 {
-    public class Shoot : GenericProjectileBaseState
+    public class Shoot : BaseSkillState
     {
-        public static float DamageCoefficient = BotanistStaticValues.gunDamageCoefficient;
-        public static float ProcCoefficient = 1f;
-        public static float BaseDuration = 0.6f;
+        public static float damageCoefficient = BotanistStaticValues.gunDamageCoefficient;
+        public static float procCoefficient = 1F;
+        public static float baseDuration = 0.6F;
         //only modify this if you know what you're doing
-        public static float BaseDelayDuration = 0.0F;
-        public static float FirePercentTime = 0.0f;
-        public static float Force = 800f;
-        public static float Recoil = 3f;
-        public static float Range = 256f;
-        public static GameObject TracerEffectPrefab = Addressables.LoadAssetAsync<GameObject>("RoR2/Base/ClayBruiser/TracerClayBruiserMinigun.prefab").WaitForCompletion();
-
-        // private float projectileDuration;
-        // private float fireTime;
-        // private bool hasFired;
-        // private string muzzleString;
-
+        public static float baseDelayDuration = 0.0F;
+        public static float fireDelay = 0.2F;
+        public static float force = 800F;
+        public static float recoil = 3F;
+        public static float range = 256F;
+        public static float minSpread = -0.6F; // controls minimum spread
+        public static float maxSpread = 0.6F; // controls maximum spread
+        public static float spreadYawScale = 1F;
+        public static float spreadPitchScale = 1F;
+        public static float bonusYaw = 0F;
+        public static float bonusPitch = -15F; // controls arc of throw
+        public int projectileCount = 1;
+        private float stopwatch = 0F;
         public override void OnEnter()
         {
-            projectilePrefab = Addressables.LoadAssetAsync<GameObject>("RoR2/Base/ClayBoss/ClayPotProjectile.prefab").WaitForCompletion();
-            attackSoundString = "BotanistPotThrow";
-            baseDuration = BaseDuration;
-            baseDelayBeforeFiringProjectile = BaseDelayDuration;
-            damageCoefficient = DamageCoefficient;
-            force = Force;
-            recoilAmplitude = Recoil;
-            bloom = 10F;
-            // projectileDuration = BaseDuration / attackSpeedStat;
-            // fireTime = FirePercentTime * projectileDuration;
             base.OnEnter();
-            
-            PlayAnimation("LeftArm, Override", "ShootGun", "ShootGun.playbackRate", 1.8f);
+            fireDelay /= base.attackSpeedStat;
+            baseDuration /= base.attackSpeedStat;
         }
-
         public override void OnExit()
         {
             base.OnExit();
         }
-
         public override void FixedUpdate()
         {
             base.FixedUpdate();
-
-            // if (fixedAge >= fireTime)
-            // {
-            //     Fire();
-            // }
-
-            // if (fixedAge >= duration && isAuthority)
-            // {
-            //     outer.SetNextStateToMain();
-            //     return;
-            // }
+            stopwatch -= Time.fixedDeltaTime;
+            if(stopwatch <= 0 && projectileCount > 0)
+            {
+                projectileCount--;
+                Fire();
+            }
+            if(base.fixedAge >= baseDuration) {
+                base.outer.SetNextStateToMain();
+            }
         }
-
-        // private void Fire()
-        // {
-        //     if (!hasFired)
-        //     {
-        //         hasFired = true;
-
-        //         characterBody.AddSpreadBloom(1.5f);
-        //         RoR2.EffectManager.SimpleMuzzleFlash(EntityStates.Commando.CommandoWeapon.FirePistol2.muzzleEffectPrefab, gameObject, muzzleString, false);
-        //         RoR2.Util.PlaySound("BotanistShootPistol", gameObject);
-
-        //         if (isAuthority)
-        //         {
-        //             Ray aimRay = GetAimRay();
-        //             AddRecoil(-1f * recoil, -2f * recoil, -0.5f * recoil, 0.5f * recoil);
-        //             // new RoR2.BlastAttack
-        //             // {
-
-        //             // }.Fire();
-        //             // new RoR2.OverlapAttack
-        //             // {
-        //             //     attacker = gameObject,
-        //             //     inflictor = gameObject,
-        //             //     teamIndex = TeamIndex.Player,
-        //             //     attackerFiltering = AttackerFiltering.Default,
-        //             //     forceVector = aimRay.direction,
-        //             //     pushAwayForce = force,
-        //             //     damage = damageCoefficient * damageStat,
-        //             //     isCrit = RollCrit(),
-        //             //     procChainMask = default,
-        //             //     procCoefficient = procCoefficient,
-        //             //     hitBoxGroup = default,
-        //             //     hitEffectPrefab = Addressables.LoadAssetAsync<GameObject>("RoR2/Base/ClayBoss/ClayPotProjectileExplosion.prefab").WaitForCompletion(),
-        //             //     impactSound = default,
-        //             //     damageColorIndex = DamageColorIndex.Default,
-        //             //     damageType = DamageType.ClayGoo,
-        //             //     maximumOverlapTargets = 100,
-        //             // }.Fire();
-        //             // new RoR2.BulletAttack
-        //             // {
-        //             //     owner = gameObject,
-        //             //     weapon = gameObject,
-        //             //     origin = aimRay.origin,
-        //             //     aimVector = aimRay.direction,
-        //             //     minSpread = 0.0F,
-        //             //     maxSpread = characterBody.spreadBloomAngle,
-        //             //     bulletCount = 1U,
-        //             //     procCoefficient = procCoefficient,
-        //             //     damage = damageCoefficient * damageStat,
-        //             //     damageType = DamageType.ClayGoo,
-        //             //     force = force,
-        //             //     falloffModel = RoR2.BulletAttack.FalloffModel.DefaultBullet,
-        //             //     tracerEffectPrefab = tracerEffectPrefab,
-        //             //     muzzleName = muzzleString,
-        //             //     hitEffectPrefab = Addressables.LoadAssetAsync<GameObject>("RoR2/Base/ClayBoss/ClayPotProjectileExplosion.prefab").WaitForCompletion(),
-        //             //     isCrit = RollCrit(),
-        //             //     HitEffectNormal = false,
-        //             //     stopperMask = RoR2.LayerIndex.world.mask,
-        //             //     smartCollision = true,
-        //             //     maxDistance = range,
-        //             // }.Fire();
-        //         }
-        //     }
-        // }
-
+        private void Fire()
+        {
+            // define pot projecile using the clay pot prefab as a base
+            FireProjectileInfo info = new FireProjectileInfo();
+            info.projectilePrefab = Addressables.LoadAssetAsync<GameObject>("RoR2/Base/ClayBoss/ClayPotProjectile.prefab").WaitForCompletion();
+            info.damage = base.damageStat * damageCoefficient;
+            info.damageTypeOverride = DamageType.ClayGoo;
+            info.damageColorIndex = DamageColorIndex.Default;
+            info.crit = base.RollCrit();
+            info.owner = gameObject;
+            info.force = force;
+            info.position = transform.position;
+            info.rotation = RoR2.Util.QuaternionSafeLookRotation(RoR2.Util.ApplySpread(base.GetAimRay().direction, minSpread, maxSpread, spreadYawScale, spreadPitchScale, bonusYaw, bonusPitch));
+            // throw the projectile
+            if (base.isAuthority) ProjectileManager.instance.FireProjectile(info);
+            Log.Debug("Botanist threw a pot");
+        }
         public override InterruptPriority GetMinimumInterruptPriority()
         {
             return InterruptPriority.PrioritySkill;
