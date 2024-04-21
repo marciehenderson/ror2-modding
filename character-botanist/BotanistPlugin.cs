@@ -23,6 +23,11 @@ using R2API.Utils;
 * be changes. Tweaks will improve behaviour once other skills
 * are complete.
 */
+/* [v003]
+* V0.0.3 - Throw Pot is now primary skill. Secondary skill is
+* an aoe attack called 'Swing Shovel' that pushes away all 
+* nearby foes.
+*/
 namespace BotanistMod
 {
     [NetworkCompatibility(CompatibilityLevel.EveryoneMustHaveMod, VersionStrictness.EveryoneNeedSameModVersion)]
@@ -31,7 +36,7 @@ namespace BotanistMod
     {
         public const string MODUID = "com.MarcieHenderson.BotanistMod";
         public const string MODNAME = "BotanistMod";
-        public const string MODVERSION = "0.0.2";
+        public const string MODVERSION = "0.0.3";
         public const string DEVELOPER_PREFIX = "MARCIEHENDERSON";
 
         public static BotanistPlugin instance;

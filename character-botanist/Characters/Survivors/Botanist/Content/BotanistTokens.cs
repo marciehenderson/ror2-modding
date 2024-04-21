@@ -21,17 +21,17 @@ namespace BotanistMod.Survivors.Botanist
             string prefix = BotanistSurvivor.BOTANIST_PREFIX;
 
             string desc = "Botanist is a skilled fighter who makes use of a wide arsenal of weaponry to take down his foes.<color=#CCD3E0>" + Environment.NewLine + Environment.NewLine
-             + "< ! > Sword is a good all-rounder while Boxing Gloves are better for laying a beatdown on more powerful foes." + Environment.NewLine + Environment.NewLine
-             + "< ! > Pistol is a powerful anti air, with its low cooldown and high damage." + Environment.NewLine + Environment.NewLine
+             + "< ! > Throw Pot is good for crowd-control and inflicting debuffs." + Environment.NewLine + Environment.NewLine
+             + "< ! > Swing Shovel is good for keeping foes at bay or pushing them into hazards." + Environment.NewLine + Environment.NewLine
              + "< ! > Roll has a lingering armor buff that helps to use it aggressively." + Environment.NewLine + Environment.NewLine
              + "< ! > Bomb can be used to wipe crowds with ease." + Environment.NewLine + Environment.NewLine;
 
-            string outro = "..and so he left, searching for a new identity.";
-            string outroFailure = "..and so he vanished, forever a blank slate.";
+            string outro = "..and so she left, having grown all she could.";
+            string outroFailure = "..and so she vanished, no longer able to grow.";
 
             Language.Add(prefix + "NAME", "Botanist");
             Language.Add(prefix + "DESCRIPTION", desc);
-            Language.Add(prefix + "SUBTITLE", "The Chosen One");
+            Language.Add(prefix + "SUBTITLE", "Friend of Flora");
             Language.Add(prefix + "LORE", "sample lore");
             Language.Add(prefix + "OUTRO_FLAVOR", outro);
             Language.Add(prefix + "OUTRO_FAILURE", outroFailure);
@@ -46,13 +46,13 @@ namespace BotanistMod.Survivors.Botanist
             #endregion
 
             #region Primary
-            Language.Add(prefix + "PRIMARY_SLASH_NAME", "Sword");
-            Language.Add(prefix + "PRIMARY_SLASH_DESCRIPTION", Tokens.agilePrefix + $"Swing forward for <style=cIsDamage>{100f * BotanistStaticValues.swordDamageCoefficient}% damage</style>.");
+            Language.Add(prefix + "PRIMARY_POT_NAME", "Pot");
+            Language.Add(prefix + "PRIMARY_POT_DESCRIPTION", Tokens.agilePrefix + $"Throws a pot for <style=cIsDamage>{100f * BotanistStaticValues.gunDamageCoefficient}% damage</style>, and inflicts a slowing debuff.");
             #endregion
 
             #region Secondary
-            Language.Add(prefix + "SECONDARY_GUN_NAME", "Handgun");
-            Language.Add(prefix + "SECONDARY_GUN_DESCRIPTION", Tokens.agilePrefix + $"Fire a handgun for <style=cIsDamage>{100f * BotanistStaticValues.gunDamageCoefficient}% damage</style>.");
+            Language.Add(prefix + "SECONDARY_SHOVEL_NAME", "Shovel");
+            Language.Add(prefix + "SECONDARY_SHOVEL_DESCRIPTION", Tokens.agilePrefix + $"Swing in a circle for <style=cIsDamage>{100f * BotanistStaticValues.swordDamageCoefficient}% damage</style>, and push foes away.");
             #endregion
 
             #region Utility

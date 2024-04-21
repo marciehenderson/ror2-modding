@@ -14,7 +14,7 @@ using EntityStates.Engi.EngiMissilePainter;
 
 namespace BotanistMod.Survivors.Botanist.SkillStates
 {
-    public class Shoot : BaseSkillState
+    public class ThrowPot : BaseSkillState
     {
         public static float damageCoefficient = BotanistStaticValues.gunDamageCoefficient;
         public static float procCoefficient = 1F;
@@ -75,7 +75,7 @@ namespace BotanistMod.Survivors.Botanist.SkillStates
         }
         public override InterruptPriority GetMinimumInterruptPriority()
         {
-            return InterruptPriority.PrioritySkill;
+            return InterruptPriority.Skill;
         }
     }
 }

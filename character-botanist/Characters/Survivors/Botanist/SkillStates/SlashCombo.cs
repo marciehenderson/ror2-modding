@@ -1,64 +1,73 @@
 ﻿using BotanistMod.Modules.BaseStates;
+using EntityStates;
+using EntityStates.Engi.EngiMissilePainter;
+using JetBrains.Annotations;
 using RoR2;
 using UnityEngine;
+using UnityEngine.AddressableAssets;
 
 namespace BotanistMod.Survivors.Botanist.SkillStates
 {
-    public class SlashCombo : BaseMeleeAttack
+    public class SlashCombo : BaseSkillState
     {
+        public static float damageCoefficient = BotanistStaticValues.swordDamageCoefficient;
+        public static float procCoefficient = 1F;
+        public static float baseDuration = 1.2F;
+        public static float force = 5000F;
+        public static float recoil = 100F;
+        public static float radius = 10F;
+        public int swingCount = 1;
+        private float stopwatch = 0F;
         public override void OnEnter()
         {
-            hitboxGroupName = "SwordGroup";
-
-            damageType = DamageType.Generic;
-            damageCoefficient = BotanistStaticValues.swordDamageCoefficient;
-            procCoefficient = 1f;
-            pushForce = 300f;
-            bonusForce = Vector3.zero;
-            baseDuration = 1f;
-
-            //0-1 multiplier of baseduration, used to time when the hitbox is out (usually based on the run time of the animation)
-            //for example, if attackStartPercentTime is 0.5, the attack will start hitting halfway through the ability. if baseduration is 3 seconds, the attack will start happening at 1.5 seconds
-            attackStartPercentTime = 0.2f;
-            attackEndPercentTime = 0.4f;
-
-            //this is the point at which the attack can be interrupted by itself, continuing a combo
-            earlyExitPercentTime = 0.6f;
-
-            hitStopDuration = 0.012f;
-            attackRecoil = 0.5f;
-            hitHopVelocity = 4f;
-
-            swingSoundString = "BotanistSwordSwing";
-            hitSoundString = "";
-            muzzleString = swingIndex % 2 == 0 ? "SwingLeft" : "SwingRight";
-            playbackRateParam = "Slash.playbackRate";
-            swingEffectPrefab = BotanistAssets.swordSwingEffect;
-            hitEffectPrefab = BotanistAssets.swordHitImpactEffect;
-
-            impactSound = BotanistAssets.swordHitSoundEvent.index;
-
             base.OnEnter();
+            baseDuration /= base.attackSpeedStat;
         }
-
-        protected override void PlayAttackAnimation()
-        {
-            PlayCrossfade("Gesture, Override", "Slash" + (1 + swingIndex), playbackRateParam, duration, 0.1f * duration);
-        }
-
-        protected override void PlaySwingEffect()
-        {
-            base.PlaySwingEffect();
-        }
-
-        protected override void OnHitEnemyAuthority()
-        {
-            base.OnHitEnemyAuthority();
-        }
-
         public override void OnExit()
         {
             base.OnExit();
+        }
+        public override void FixedUpdate()
+        {
+            base.FixedUpdate();
+            stopwatch -= Time.fixedDeltaTime;
+            if(stopwatch <= 0 && swingCount > 0)
+            {
+                swingCount--;
+                Fire();
+            }
+            if(base.fixedAge >= baseDuration) {
+                base.outer.SetNextStateToMain();
+            }
+        }
+        private void Fire()
+        {
+            // define 'melee' attack
+            RoR2.BlastAttack swing = new RoR2.BlastAttack();
+            swing.attacker = base.gameObject;
+            swing.attackerFiltering = AttackerFiltering.NeverHitSelf;
+            swing.baseDamage = base.damageStat * damageCoefficient;
+            swing.baseForce = force;
+            swing.bonusForce = Vector3.zero;
+            swing.canRejectForce = false;
+            swing.crit = base.RollCrit();
+            swing.damageType = DamageType.AOE;
+            swing.damageColorIndex = DamageColorIndex.Default;
+            swing.falloffModel = BlastAttack.FalloffModel.Linear;
+            swing.impactEffect = RoR2.EffectCatalog.FindEffectIndexFromPrefab(Addressables.LoadAssetAsync<GameObject>("RoR2/Base/Loader/ImpactLoaderFistSmall.prefab").WaitForCompletion());
+            swing.inflictor = base.gameObject;
+            swing.losType = BlastAttack.LoSType.None;
+            swing.position = base.GetAimRay().origin;
+            swing.procChainMask = default;
+            swing.procCoefficient = procCoefficient;
+            swing.radius = radius;
+            swing.teamIndex = base.GetTeam();
+            // swing the shovel
+            if(base.isAuthority) swing.Fire();
+        }
+        public override InterruptPriority GetMinimumInterruptPriority()
+        {
+            return InterruptPriority.PrioritySkill;
         }
     }
 }

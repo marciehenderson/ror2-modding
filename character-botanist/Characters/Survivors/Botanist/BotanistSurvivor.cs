@@ -121,9 +121,9 @@ namespace BotanistMod.Survivors.Botanist
 
         public void AddHitboxes()
         {
-            //example of how to create a HitBoxGroup. see summary for more details
-            //temporarily removed for testing
-            // Prefabs.SetupHitBoxGroup(characterModelObject, "SwordGroup", "SwordHitbox");
+            // Hitbox group for Shovel Swing
+            // temporarily set to MainHurtBox until dedicated hitbox is created
+            Prefabs.SetupHitBoxGroup(characterModelObject, "ShovelGroup", "MainHurtbox");
         }
 
         public override void InitializeEntityStateMachines() 
@@ -137,7 +137,7 @@ namespace BotanistMod.Survivors.Botanist
             //if you set up a custom main characterstate, set it up here
                 //don't forget to register custom entitystates in your BotanistStates.cs
 
-            Prefabs.AddEntityStateMachine(bodyPrefab, "Weapon");
+            Prefabs.AddEntityStateMachine(bodyPrefab, "Weapon1");
             Prefabs.AddEntityStateMachine(bodyPrefab, "Weapon2");
         }
 
@@ -206,68 +206,68 @@ namespace BotanistMod.Survivors.Botanist
             });
             Skills.AddSkillsToFamily(passiveGenericSkill.skillFamily, passiveSkillDef1);
         }
-
-        //if this is your first look at skilldef creation, take a look at Secondary first
         private void AddPrimarySkills()
         {
             Skills.CreateGenericSkillWithSkillFamily(bodyPrefab, SkillSlot.Primary);
+            // creates primary skill for botanist called 'Throw Pot'
+            SkillDef primarySkillDef1 = Skills.CreateSkillDef(new SkillDefInfo
+            {
+                skillName = "BotanistPot",
+                skillNameToken = BOTANIST_PREFIX + "PRIMARY_POT_NAME",
+                skillDescriptionToken = BOTANIST_PREFIX + "PRIMARY_POT_DESCRIPTION",
+                keywordTokens = new string[] { "KEYWORD_AGILE" },
+                skillIcon = assetBundle.LoadAsset<Sprite>("texPrimaryIcon"),
+                activationState = new EntityStates.SerializableEntityStateType(typeof(SkillStates.ThrowPot)),
+                activationStateMachineName = "Weapon1",
+                interruptPriority = EntityStates.InterruptPriority.Skill,
+                baseRechargeInterval = 1F,
+                baseMaxStock = 1,
+                rechargeStock = 1,
+                requiredStock = 1,
+                stockToConsume = 1,
+                resetCooldownTimerOnUse = false,
+                fullRestockOnAssign = true,
+                dontAllowPastMaxStocks = false,
+                mustKeyPress = false,
+                beginSkillCooldownOnSkillEnd = false,
+                isCombatSkill = true,
+                canceledFromSprinting = false,
+                cancelSprintingOnActivation = false,
+                forceSprintDuringState = false,
 
-            //the primary skill is created using a constructor for a typical primary
-            //it is also a SteppedSkillDef. Custom Skilldefs are very useful for custom behaviors related to casting a skill. see ror2's different skilldefs for reference
-            SteppedSkillDef primarySkillDef1 = Skills.CreateSkillDef<SteppedSkillDef>(new SkillDefInfo
-                (
-                    "BotanistSlash",
-                    BOTANIST_PREFIX + "PRIMARY_SLASH_NAME",
-                    BOTANIST_PREFIX + "PRIMARY_SLASH_DESCRIPTION",
-                    assetBundle.LoadAsset<Sprite>("texPrimaryIcon"),
-                    new EntityStates.SerializableEntityStateType(typeof(SkillStates.SlashCombo)),
-                    "Weapon",
-                    true
-                ));
-            //custom Skilldefs can have additional fields that you can set manually
-            primarySkillDef1.stepCount = 2;
-            primarySkillDef1.stepGraceDuration = 0.5f;
-
+            }); 
             Skills.AddPrimarySkills(bodyPrefab, primarySkillDef1);
         }
 
         private void AddSecondarySkills()
         {
             Skills.CreateGenericSkillWithSkillFamily(bodyPrefab, SkillSlot.Secondary);
-
-            //here is a basic skill def with all fields accounted for
+            // creates the secondary skill for botanist called 'Swing Shovel'
             SkillDef secondarySkillDef1 = Skills.CreateSkillDef(new SkillDefInfo
             {
-                skillName = "BotanistGun",
-                skillNameToken = BOTANIST_PREFIX + "SECONDARY_GUN_NAME",
-                skillDescriptionToken = BOTANIST_PREFIX + "SECONDARY_GUN_DESCRIPTION",
+                skillName = "BotanistShovel",
+                skillNameToken = BOTANIST_PREFIX + "Secondary_SHOVEL_NAME",
+                skillDescriptionToken = BOTANIST_PREFIX + "Secondary_SHOVEL_DESCRIPTION",
                 keywordTokens = new string[] { "KEYWORD_AGILE" },
-                skillIcon = assetBundle.LoadAsset<Sprite>("texSecondaryIcon"),
-
-                activationState = new EntityStates.SerializableEntityStateType(typeof(SkillStates.Shoot)),
-                activationStateMachineName = "Weapon2",
-                interruptPriority = EntityStates.InterruptPriority.Skill,
-
-                baseRechargeInterval = 1f,
+                skillIcon = assetBundle.LoadAsset<Sprite>("texPrimaryIcon"),
+                activationState = new EntityStates.SerializableEntityStateType(typeof(SkillStates.SlashCombo)),
+                activationStateMachineName = "Weapon1",
+                interruptPriority = EntityStates.InterruptPriority.PrioritySkill,
+                baseRechargeInterval = 3F,
                 baseMaxStock = 1,
-
                 rechargeStock = 1,
                 requiredStock = 1,
                 stockToConsume = 1,
-
                 resetCooldownTimerOnUse = false,
                 fullRestockOnAssign = true,
                 dontAllowPastMaxStocks = false,
                 mustKeyPress = false,
                 beginSkillCooldownOnSkillEnd = false,
-
                 isCombatSkill = true,
                 canceledFromSprinting = false,
                 cancelSprintingOnActivation = false,
                 forceSprintDuringState = false,
-
             });
-
             Skills.AddSecondarySkills(bodyPrefab, secondarySkillDef1);
         }
 
