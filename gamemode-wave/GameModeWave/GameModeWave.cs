@@ -37,6 +37,8 @@ using System.Runtime.Serialization;
 using System.Diagnostics.Tracing;
 using System.IO;
 using System.Collections;
+using System.Data;
+using HarmonyLib;
 
 /***
 description: RoR2 Plugin for Adding a Wave-Based Game-Mode
@@ -612,7 +614,25 @@ namespace GameModeWave
         GameObject lobbyButtonChild = null;
         // Initialize run starting scene variables
         private static int startingSceneIndex = 0;
-        private static String startingSceneCode = "ancientloft";
+        private static string startingSceneCode = "ancientloft";
+        private readonly Dictionary<string, (string, string)> STAGE_SCENE_REFERENCE = new()
+        {
+            {"ancientloft", ("Aphelian Sanctuary", "RoR2/DLC1/ancientloft/texAncientLoftPreview.png")},
+            {"blackbeach", ("Distant Roost 1", "RoR2/Base/blackbeach/texBlackbeachPreview.png")},
+            {"blackbeach2", ("Distant Roost 2", "RoR2/Base/blackbeach/texBlackbeachPreview.png")},
+            {"dampcavesimple", ("Abyssal Depths", "RoR2/Base/dampcavesimple/texDampcavePreview.png")},
+            {"foggyswamp", ("Wetland Aspect", "RoR2/Base/foggyswamp/texFoggyswampPreview.png")},
+            {"frozenwall", ("Rallypoint Delta", "RoR2/Base/frozenwall/texFrozenwallPreview.png")},
+            {"golemplains", ("Titanic Plains 1", "RoR2/Base/golemplains/texGolemplainsPreview.png")},
+            {"golemplains2", ("Titanic Plains 2", "RoR2/Base/golemplains/texGolemplainsPreview.png")},
+            {"goolake", ("Abandoned Aqueduct", "RoR2/Base/goolake/texGoolakePreview.png")},
+            {"rootjungle", ("Sundered Grove", "RoR2/Base/rootjungle/texRootjunglePreview.png")},
+            {"shipgraveyard", ("Siren's Call", "RoR2/Base/shipgraveyard/texShipgraveyardPreview.png")},
+            {"skymeadow", ("Sky Meadow", "RoR2/Base/skymeadow/texSkymeadowPreview.png")},
+            {"snowyforest", ("Siphoned Forest", "RoR2/DLC1/snowyforest/texSnowyforestPreview.jpg")},
+            {"sulfurpools", ("Sulfur Pools", "RoR2/DLC1/sulfurpools/texSulfurPoolsPreview.png")},
+            {"wispgraveyard", ("Scorched Acres", "RoR2/Base/wispgraveyard/texWispgraveyardPreview.png")},
+        };
         // Initialize field info used in replacing the code at run start
         private static readonly FieldInfo onRunStartGlobalDelegate = typeof(Run).GetField(nameof(Run.onRunStartGlobal), BindingFlags.NonPublic | BindingFlags.Static);
         private static float previousTime = 0;
@@ -635,6 +655,7 @@ namespace GameModeWave
             // Add Hooks
             // adds new lobby ui button
             On.RoR2.UI.CharacterSelectController.Awake += CreateLobbyUI;
+            On.RoR2.UI.RuleCategoryController.SetData += LobbyController;
             // disables pod drop animation on run start
             On.RoR2.Stage.Start += (orig, self) =>
             {
@@ -677,7 +698,6 @@ namespace GameModeWave
                 rectTransform.anchorMax = Vector2.one; // top right
                 rectTransform.sizeDelta = Vector2.zero;
                 rectTransform.anchoredPosition = Vector2.zero;
-                
                 // Make visual component of button
                 UnityEngine.UI.Image lobbyButtonImage = lobbyButton.AddComponent<UnityEngine.UI.Image>();
                 lobbyButtonImage.sprite = Addressables.LoadAssetAsync<Sprite>("RoR2/Base/UI/texUILaunchButton.png").WaitForCompletion();
@@ -779,6 +799,46 @@ namespace GameModeWave
             lobbyButtonText.text = lobbyButtonString;
             lobbyButtonText.ForceMeshUpdate();
             Log.Debug(lobbyButtonString + " code: " + startingSceneCode + " index: " + startingSceneIndex);
+        }
+        // Better lobby ui
+        private void LobbyController(On.RoR2.UI.RuleCategoryController.orig_SetData orig, RoR2.UI.RuleCategoryController self, RoR2.RuleCategoryDef categoryDef, RoR2.RuleChoiceMask availability, RoR2.RuleBook rulebook)
+        {
+            Log.Debug("Attempting to add new rule.");
+            try
+            {
+                RoR2.RuleCategoryDef ruleCategory = new()
+                {
+                    displayToken = "Stages",
+                    subtitleToken = "Choose Your Destination",
+                    color = UnityEngine.Color.white,
+                    ruleCategoryType = RuleCatalog.RuleCategoryType.StripVote,
+                };
+                RoR2.RuleDef rule = new("stageoptions", "Options");
+                List<RoR2.RuleChoiceDef> ruleChoices = new();
+                foreach(var pair in STAGE_SCENE_REFERENCE)
+                {
+                    ruleChoices.Add(new RoR2.RuleChoiceDef()
+                    {
+                        tooltipNameToken = pair.Value.Item1,
+                        tooltipBodyToken = pair.Key,
+                        sprite = Addressables.LoadAssetAsync<UnityEngine.Sprite>(pair.Value.Item2).WaitForCompletion(),
+                        ruleDef = rule,
+                    });
+                }
+                rule.category = ruleCategory;
+                rule.choices = ruleChoices;
+                rule.defaultChoiceIndex = 0;
+                // tell rule category controller to also display the new rule
+                rulebook
+                Log.Debug("Added new rule successfully");
+            }
+            catch(Exception e)
+            {
+                Log.Warning("Error adding stage selection to rules");
+                Log.Warning(e);
+            }
+            
+            orig(self, categoryDef, availability, rulebook);
         }
         #endregion methods
     }

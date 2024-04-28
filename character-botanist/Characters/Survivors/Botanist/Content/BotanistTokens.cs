@@ -62,7 +62,7 @@ namespace BotanistMod.Survivors.Botanist
 
             #region Special
             Language.Add(prefix + "SPECIAL_BOMB_NAME", "Bomb");
-            Language.Add(prefix + "SPECIAL_BOMB_DESCRIPTION", $"Throw a bomb for <style=cIsDamage>{100f * BotanistStaticValues.bombDamageCoefficient}% damage</style>.");
+            Language.Add(prefix + "SPECIAL_BOMB_DESCRIPTION", $"Throw a bomb for <style=cIsDamage>{100f * BotanistStaticValues.sprayDamageCoefficient}% damage</style>.");
             #endregion
 
             #region Achievements

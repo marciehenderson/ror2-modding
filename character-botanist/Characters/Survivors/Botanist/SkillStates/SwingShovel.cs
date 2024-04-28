@@ -36,7 +36,8 @@ namespace BotanistMod.Survivors.Botanist.SkillStates
                 swingCount--;
                 Fire();
             }
-            if(base.fixedAge >= baseDuration) {
+            if(base.fixedAge >= baseDuration)
+            {
                 base.outer.SetNextStateToMain();
             }
         }
@@ -73,7 +74,7 @@ namespace BotanistMod.Survivors.Botanist.SkillStates
                     true
                 );
                 swing.Fire();
-                Log.Debug("Botanist swung their shovel");
+                Log.Debug("Botanist swung her shovel");
             }
         }
         public override InterruptPriority GetMinimumInterruptPriority()

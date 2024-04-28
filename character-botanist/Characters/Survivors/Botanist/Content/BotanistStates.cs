@@ -12,7 +12,7 @@ namespace BotanistMod.Survivors.Botanist
 
             Modules.Content.AddEntityState(typeof(WaterHop));
 
-            Modules.Content.AddEntityState(typeof(ThrowBomb));
+            Modules.Content.AddEntityState(typeof(WaterTheGarden));
         }
     }
 }

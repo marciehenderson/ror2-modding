@@ -284,7 +284,7 @@ namespace BotanistMod.Survivors.Botanist
                 activationState = new EntityStates.SerializableEntityStateType(typeof(WaterHop)),
                 activationStateMachineName = "Body",
                 interruptPriority = EntityStates.InterruptPriority.PrioritySkill,
-                baseRechargeInterval = 4f,
+                baseRechargeInterval = 4F,
                 baseMaxStock = 1,
                 rechargeStock = 1,
                 requiredStock = 1,
@@ -306,23 +306,30 @@ namespace BotanistMod.Survivors.Botanist
         {
             Skills.CreateGenericSkillWithSkillFamily(bodyPrefab, SkillSlot.Special);
 
-            //a basic skill. some fields are omitted and will just have default values
+            // creates the special skill for botanist called 'Water the Garden'
             SkillDef specialSkillDef1 = Skills.CreateSkillDef(new SkillDefInfo
             {
-                skillName = "BotanistBomb",
-                skillNameToken = BOTANIST_PREFIX + "SPECIAL_BOMB_NAME",
-                skillDescriptionToken = BOTANIST_PREFIX + "SPECIAL_BOMB_DESCRIPTION",
+                skillName = "BotanistSpray",
+                skillNameToken = BOTANIST_PREFIX + "SPECIAL_SPRAY_NAME",
+                skillDescriptionToken = BOTANIST_PREFIX + "SPECIAL_SPRAY_DESCRIPTION",
                 skillIcon = assetBundle.LoadAsset<Sprite>("texSpecialIcon"),
-
-                activationState = new EntityStates.SerializableEntityStateType(typeof(SkillStates.ThrowBomb)),
-                //setting this to the "weapon2" EntityStateMachine allows us to cast this skill at the same time primary, which is set to the "weapon" EntityStateMachine
-                activationStateMachineName = "Weapon2", interruptPriority = EntityStates.InterruptPriority.Skill,
-
+                activationState = new EntityStates.SerializableEntityStateType(typeof(SkillStates.WaterTheGarden)),
+                activationStateMachineName = "Weapon2",
+                interruptPriority = EntityStates.InterruptPriority.PrioritySkill,
+                baseRechargeInterval = 6F,
                 baseMaxStock = 1,
-                baseRechargeInterval = 10f,
-
-                isCombatSkill = true,
+                rechargeStock = 1,
+                requiredStock = 1,
+                stockToConsume = 1,
+                resetCooldownTimerOnUse = false,
+                fullRestockOnAssign = true,
+                dontAllowPastMaxStocks = false,
                 mustKeyPress = false,
+                beginSkillCooldownOnSkillEnd = false,
+                isCombatSkill = true,
+                canceledFromSprinting = false,
+                cancelSprintingOnActivation = false,
+                forceSprintDuringState = false,
             });
 
             Skills.AddSpecialSkills(bodyPrefab, specialSkillDef1);

@@ -8,8 +8,7 @@ using R2API.Utils;
 * @author: Marcie Henderson
 * @since: 20240415
 * @note: Based on HenryMod tutorial for creating characters.
-* @todo: Create base skills for Botanist (Primary, Secondary,
-* Utility, Special)
+* @todo: Create base skills for Botanist (Special)
 */
 // @history: 
 /* [v001]
