@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: -2099961501, guid: e161fae64b898bc22624d03ed611378f, type: 3}
+  m_Name: ppSceneITLobby
+  m_EditorClassIdentifier:
+  settings:
+  - {fileID: 11400000, guid: 591880a28e14ada44ad492cb5f0de18b, type: 2}
+  - {fileID: 11400000, guid: 4a19e27927b09584f97d1abb5b25c9a8, type: 2}
+  - {fileID: 11400000, guid: 0321119d3e07c1843b84f1b36c6b8db5, type: 2}
+  - {fileID: 11400000, guid: 39062d900c9484345a6cec0143e47d5e, type: 2}
+  - {fileID: 11400000, guid: a53462aa4c631414587383324d5db98a, type: 2}

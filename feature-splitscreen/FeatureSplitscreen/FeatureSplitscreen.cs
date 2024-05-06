@@ -7,7 +7,11 @@ using RoR2;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.UI;
-
+///*
+/// @description: an implementation of a local 
+/// splitscreen coop feature for Risk of Rain 2
+/// @author: MarcieHenderson
+/// @since: 20240428
 namespace FeatureSplitscreen
 {
     // dependency declaration
@@ -31,11 +35,12 @@ namespace FeatureSplitscreen
             // Initialize logger
             Log.Init(Logger);
             // Generate hooks
-        }
-        // The OnDestroy() method is run when the plugin is removed on game end.
-        private void OnDestroy()
-        {
-            // Clean up hooks
+            // Hook onto LobbyInit methods
+            On.RoR2.LobbyManager.OnMultiplayerMenuEnabled += LobbyInit.OnMultiplayerMenuEnabled;
+            On.RoR2.UI.MainMenu.MultiplayerMenuController.Awake += LobbyInit.MultiplayerMenuController;
+            On.RoR2.UI.LobbyUserList.Awake += (orig, self) => {
+                orig(self);
+            };
         }
         // The Update() method is run on every frame of the game.
         private void Update()
