@@ -36,11 +36,9 @@ namespace FeatureSplitscreen
             Log.Init(Logger);
             // Generate hooks
             // Hook onto LobbyInit methods
-            On.RoR2.LobbyManager.OnMultiplayerMenuEnabled += LobbyInit.OnMultiplayerMenuEnabled;
             On.RoR2.UI.MainMenu.MultiplayerMenuController.Awake += LobbyInit.MultiplayerMenuController;
-            On.RoR2.UI.LobbyUserList.Awake += (orig, self) => {
-                orig(self);
-            };
+            // Hook onto LocalUserAdd methods
+            On.RoR2.LocalUserManager.Update += LocalUserAdd.LocalUserManagerUpdate;
         }
         // The Update() method is run on every frame of the game.
         private void Update()

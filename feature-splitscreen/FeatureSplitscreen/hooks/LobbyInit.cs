@@ -1,6 +1,7 @@
 using System;
 using AK.Wwise;
 using EntityStates.BrotherMonster;
+using HarmonyLib;
 using R2API.Utils;
 using RoR2.UI;
 using TMPro;
@@ -14,13 +15,6 @@ namespace FeatureSplitscreen
         // attributes
         
         // methods
-        public static void OnMultiplayerMenuEnabled(On.RoR2.LobbyManager.orig_OnMultiplayerMenuEnabled orig, RoR2.LobbyManager self, Action<RoR2.UserID> onLobbyLeave)
-        {
-            // run standard multiplayer lobby init
-            orig(self, onLobbyLeave);
-            // debug message to notify when a multiplayer lobby has been enabled
-            Log.Debug("Entered a multiplayer lobby.");
-        }
         public static void MultiplayerMenuController(On.RoR2.UI.MainMenu.MultiplayerMenuController.orig_Awake orig, RoR2.UI.MainMenu.MultiplayerMenuController self)
         {
             orig(self);
@@ -69,9 +63,50 @@ namespace FeatureSplitscreen
                 {
                     // log event
                     Log.Debug("Enable Button Clicked");
-                    // add local player to lobby
-                    // Rewired.Player newPlayer = new Rewired.Player();
-                    // RoR2.LocalUserManager.AddUser();
+                    // try to add local player to lobby
+                    try
+                    {
+                        // run the test_splitscreen console command to add guest users
+                        RoR2.Console.instance.RunClientCmd(default, "test_splitscreen", ["2"]);
+                        // report success to logger
+                        Log.Debug("Added guest users to lobby");
+                        // manage local user controllers
+                        int userId = 0;
+                        #pragma warning disable Publicizer001
+                        foreach(var user in RoR2.LocalUserManager.localUsersList)
+                        {
+                            // give unique name to user
+                            user.userProfile.name += userId;
+                            // for every guest user assign appropriate controller bindings
+                            try
+                            {
+                                var controllers = user.inputPlayer.controllers;
+                                if(userId == 0)
+                                {
+                                    controllers.AddController(Rewired.ControllerType.Keyboard, userId, true);
+                                    controllers.AddController(Rewired.ControllerType.Mouse, userId, true);
+                                }
+                                else
+                                {
+                                    controllers.ClearAllControllers();
+                                }
+                                Log.Debug("ID: " + user.id + " Name: " + user.userProfile.name);
+                            }
+                            catch(Exception e)
+                            {
+                                Log.Warning("Failed to reassign controllers for local users.");
+                                Log.Warning(e);
+                            }
+                            // increment userId
+                            userId++;
+                        }
+                        #pragma warning restore Publicizer001
+                    }
+                    catch(Exception e)
+                    {
+                        Log.Warning("Failed to add new local player to lobby");
+                        Log.Warning(e);
+                    }
                 });
                 // layout control
                 UnityEngine.UI.LayoutElement enableElm = enableObj.AddComponent<UnityEngine.UI.LayoutElement>();
